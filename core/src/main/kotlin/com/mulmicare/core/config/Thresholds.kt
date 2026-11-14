@@ -34,6 +34,11 @@ data class Thresholds(
     val harshSteerDegPerSec: Float = 15f,
     /** F5.3 급감속(km/h per s). 구간 판단용 감속([decelEventKphPerSec])보다 강하다. 임시값. */
     val harshDecelKphPerSec: Float = 8f,
+    /**
+     * F5.3 급감속은 이 시간 이상 떨어진 두 속도 샘플로 잰다. 속도가 계단식으로 갱신되면(에뮬레이터에서 확인,
+     * 실차 센서 잡음도 비슷) 짧은 간격의 순간 변화율이 실제보다 크게 나온다. 실제 급정거는 보통 1초 넘게 이어진다.
+     */
+    val harshDecelWindowMs: Long = 1_000,
     /** F5.3 별이 떨어진 뒤 이 시간 안의 급한 동작은 같은 동작으로 본다(종류 무관). 임시값. */
     val harshRefractoryMs: Long = 2_000,
     /** 조향 샘플 간격이 이보다 짧으면 회전 속도를 계산하지 않는다(노이즈 방지). */

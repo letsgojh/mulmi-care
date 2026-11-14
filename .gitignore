@@ -22,3 +22,7 @@ captures/
 
 # Kotlin 컴파일 캐시
 .kotlin/
+
+# 재현 지도 상태 (실행 중 생성)
+scripts/emulator/map/state.json
+scripts/emulator/map/state.json.tmp

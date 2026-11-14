@@ -104,7 +104,7 @@ flowchart LR
 
 ### 테스트 (TDD)
 판단 로직은 테스트를 먼저 쓰고 구현했습니다. 경계값(기준 바로 아래·같음·바로 위)과 "하지 않는다"는 안전 규칙도 테스트로 고정했습니다.
-- core 153개: 굽은 길 구간, 좌우 소리, 별, 음성 흐름, 공조, 출발 전 제안, 쉼터 찾기, 기획서 시나리오(SC3 굽은 국도, SC4 운전 집중) 인수 테스트
+- core 155개: 굽은 길 구간, 좌우 소리, 별, 음성 흐름, 공조, 출발 전 제안, 쉼터 찾기, 기획서 시나리오(SC3 굽은 국도, SC4 운전 집중) 인수 테스트
 - vehicle 20개: SDK 값 변환(조향 보정, 기어, 속도 단위, 풍향, 회전 안내)
 
 ### 에뮬레이터 (Pleos Connect Emulator v2.1.0)
@@ -146,6 +146,7 @@ adb forward tcp:8088 tcp:8088                                              # Vir
 adb shell am start -n com.mulmicare.app/.MainActivity --ez autostart true  # 디버그: 바로 케어 시작
 bash scripts/emulator/sc3-country-road.sh                                  # SC3 굽은 국도 재생 (약 3분)
 bash scripts/emulator/enter-curve.sh 60                                    # 굽은 길 진입 후 마이크로 직접 "응"
+bash scripts/emulator/demo.sh                                              # 시연: 실제 한계령 도로로 주행 재현 (약 9분)
 adb logcat -s MulmiCare                                                    # 동작 로그
 ```
 디버그 빌드에서는 adb 브로드캐스트로 음성 응답(`com.mulmicare.DEBUG_SAY --es text 응`), 내비 경로 요청(`DEBUG_ROUTE`), "힘들어해요" 버튼(`DEBUG_STRUGGLE`), 케어 시작·끝(`DEBUG_START_CARE`, `DEBUG_END_CARE`)을 흉내 낼 수 있습니다.
@@ -153,6 +154,11 @@ adb logcat -s MulmiCare                                                    # 동
 ## 개발 방식
 
 [Claude Code](https://claude.com/claude-code)와 함께 개발했습니다. 저장소의 [`.claude/`](.claude/)에 이 프로젝트용 작업 규칙(하네스)이 있습니다. 기획서 규칙 추적, TDD 절차, Pleos SDK 사용법·검증 기록, 안전 원칙 점검, core 수정 시 테스트 자동 실행이 들어 있습니다.
+
+## 시연
+실제 한계령(44번 국도) 도로 좌표로 주행을 재현해 시연합니다: 곧은 길에서는 조용하다가 고갯길에 들어서면 놀이를 제안하고, 커브 방향대로 좌우 소리를 냅니다. 에뮬레이터 내비는 위치를 바꿀 수 없어 같은 주행을 별도의 재현 지도에 보여 줍니다. 시나리오: [docs/demo-video.md](docs/demo-video.md)
+
+경로 좌표: © OpenStreetMap contributors (ODbL), OSRM으로 계산. 재현 지도 배경: © OpenStreetMap contributors.
 
 ## 참고 연구
 1. Reuten, Yunus, Bos, Martens, Smeets, "Anticipatory cues can mitigate car sickness on the road", *Transportation Research Part F*, 105, 2024.

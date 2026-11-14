@@ -188,6 +188,34 @@ class StarJudgeTest {
         assertEquals(3, round(signals).stars)
     }
 
+    @Test
+    fun `F5_3 속도가 계단식으로 갱신돼 순간 변화율만 큰 완만한 감속은 급감속이 아니다`() {
+        // 리허설: 평균 5.4km/h/s의 완만한 감속(커브 앞)에서 별이 떨어졌다. 0.5초마다 2.7km/h씩 계단으로 들어오는 경우
+        val signals = trace {
+            var kph = 60f
+            for (i in 0..40) {
+                val ms = i * 100L
+                if (i > 0 && i % 5 == 0) kph -= 2.7f
+                atMs(ms) { speed(kph) }
+            }
+        }
+        assertEquals(3, round(signals).stars)
+    }
+
+    @Test
+    fun `F5_3 1초 넘게 이어지는 급감속은 계단식으로 들어와도 급감속이다`() {
+        val step = t.harshDecelKphPerSec + 2f // 초당 이만큼
+        val signals = trace {
+            var kph = 80f
+            for (i in 0..30) {
+                val ms = i * 100L
+                if (i > 0 && i % 5 == 0) kph -= step / 2 // 0.5초마다 계단
+                atMs(ms) { speed(kph) }
+            }
+        }
+        assertEquals(2, round(signals).stars)
+    }
+
     // --- 판 경계 ---
 
     @Test

@@ -71,6 +71,7 @@ class PleosNavi(
         }
 
         override fun onCurrentLocationInfo(currentLocationInfo: CurrentLocationInfo) {
+            onLog("내비 위치: ${currentLocationInfo.latitude}, ${currentLocationInfo.longitude}, 방향 ${currentLocationInfo.heading}, ${currentLocationInfo.address}")
             listener.onLocation(currentLocationInfo.latitude, currentLocationInfo.longitude, currentLocationInfo.heading)
         }
 
