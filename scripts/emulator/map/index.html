@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>주행 재현 지도</title>
+<title>주행 재현 지도 (시연용)</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
   :root { --bg: #f7f7f5; --ink: #1b1b1b; --muted: #6b6b6b; --route: #b9b9b9; --demo: #2b6cb0; --car: #e4572e; }
@@ -12,6 +12,7 @@
   .panel { position: absolute; z-index: 1000; left: 16px; top: 16px; background: rgba(255,255,255,0.95); border-radius: 12px;
            padding: 14px 18px; box-shadow: 0 2px 12px rgba(0,0,0,0.15); min-width: 240px; }
   .panel h1 { margin: 0 0 4px; font-size: 18px; }
+  .badge { display: inline-block; margin-bottom: 8px; padding: 4px 10px; border-radius: 6px; background: #1b1b1b; color: #fff; font-size: 13px; font-weight: 700; }
   .panel .note { margin: 0 0 12px; font-size: 12px; color: var(--muted); line-height: 1.4; }
   .row { display: flex; justify-content: space-between; font-size: 15px; padding: 3px 0; }
   .row b { font-variant-numeric: tabular-nums; font-size: 22px; }
@@ -22,8 +23,9 @@
 <body>
 <div id="map"></div>
 <div class="panel">
+  <div class="badge">시연용 화면 · 멀미케어 앱 화면 아님</div>
   <h1>주행 재현 지도 · 한계령</h1>
-  <p class="note">에뮬레이터 내비는 위치를 바꿀 수 없어,<br>Virtual Console로 보내는 주행을 여기에 표시합니다.</p>
+  <p class="note">에뮬레이터 내비는 위치를 바꿀 수 없어,<br>시연용 주행을 여기에 표시합니다.<br>멀미케어는 주행 중 화면 없이 소리로만 동작합니다.</p>
   <div class="row"><span>속도</span><b id="kph">0</b></div>
   <div class="row"><span>핸들</span><b id="wheel">0°</b></div>
   <div class="row"><span>위치</span><b id="km">0.0 km</b></div>
