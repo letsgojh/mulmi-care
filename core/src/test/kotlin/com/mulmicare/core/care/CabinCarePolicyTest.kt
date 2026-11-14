@@ -6,6 +6,7 @@ import com.mulmicare.core.care.FanDirection.FACE
 import com.mulmicare.core.care.FanDirection.FLOOR
 import com.mulmicare.core.config.Thresholds
 import com.mulmicare.core.effect.Effect.ApplyClimate
+import com.mulmicare.core.effect.Effect.RestoreClimate
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -173,6 +174,33 @@ class CabinCarePolicyTest {
         assertEquals(22.5f, baseFor(2))
         assertEquals(22f, baseFor(3))
         assertEquals(22f, baseFor(11))
+    }
+
+    // --- 케어 종료: 공조 되돌리기 ---
+
+    @Test
+    fun `케어가 끝나면 공조를 케어 전 기준값으로 되돌린다`() {
+        summer()
+        policy.onSegmentStarted(10_000)
+        assertEquals(listOf(RestoreClimate(baseline)), policy.onCareEnded(60_000))
+    }
+
+    @Test
+    fun `기준값을 읽기 전에 끝나면 되돌릴 것이 없다`() {
+        policy.onSegmentStarted(0)
+        assertEquals(emptyList(), policy.onCareEnded(1_000))
+    }
+
+    @Test
+    fun `케어가 끝난 뒤에는 구간이 시작되거나 시간이 지나도 공조를 바꾸지 않는다`() {
+        summer()
+        policy.onSegmentStarted(0)
+        policy.onSegmentEnded(10_000)
+        policy.onCareEnded(20_000)
+        assertEquals(emptyList(), policy.onTick(10_000 + hold))
+        assertEquals(emptyList(), policy.onSegmentStarted(30 * 60_000))
+        assertEquals(emptyList(), policy.onPassengerStruggling(31 * 60_000))
+        assertEquals(emptyList(), policy.onCareEnded(32 * 60_000))
     }
 
     // --- F9.3, 기준값 ---

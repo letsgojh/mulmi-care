@@ -8,6 +8,8 @@ data class ClimateBaseline(
     val fanSpeed: Int? = null,
     val fanSpeedMax: Int? = null,
     val fanDirection: FanDirection? = null,
+    /** 내기 순환이 켜져 있었는지. 케어가 끝나면 이 상태로 되돌린다. */
+    val recirculation: Boolean? = null,
 )
 
 /**

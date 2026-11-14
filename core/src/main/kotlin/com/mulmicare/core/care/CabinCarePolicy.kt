@@ -29,6 +29,7 @@ class CabinCarePolicy(
     private var winter = false
     private var inSegment = false
     private var revertAtMs: Long? = null
+    private var ended = false
 
     /** 케어를 켤 때 읽은 공조 상태. [outsideC]를 모르면 null, [month]는 1~12. */
     fun onBaseline(atMs: Long, baseline: ClimateBaseline, outsideC: Float?, month: Int): List<Effect> {
@@ -54,16 +55,25 @@ class CabinCarePolicy(
         return boost()
     }
 
+    /** 케어가 끝남(정지·도착). 공조를 기준값으로 되돌린다. 이후에는 아무것도 바꾸지 않는다. */
+    fun onCareEnded(atMs: Long): List<Effect> {
+        if (ended) return emptyList()
+        ended = true
+        revertAtMs = null
+        val b = baseline ?: return emptyList()
+        return listOf(Effect.RestoreClimate(b))
+    }
+
     fun onTick(atMs: Long): List<Effect> {
         val at = revertAtMs ?: return emptyList()
-        if (inSegment || atMs < at) return emptyList()
+        if (ended || inSegment || atMs < at) return emptyList()
         revertAtMs = null
         level = CareLevel.BASE
         return applyCurrent()
     }
 
     private fun boost(): List<Effect> {
-        if (level == CareLevel.BOOST) return emptyList()
+        if (ended || level == CareLevel.BOOST) return emptyList()
         level = CareLevel.BOOST
         return applyCurrent()
     }

@@ -31,6 +31,10 @@ class EffectRunner(
     @Volatile
     var climate: PleosClimate? = null
 
+    /** 공조 되돌리기가 확인되면 부른다(저장해 둔 기준값을 지우는 데 쓴다). */
+    @Volatile
+    var onClimateRestored: (() -> Unit)? = null
+
     fun run(effects: List<Effect>) = effects.forEach(::run)
 
     private fun run(effect: Effect) {
@@ -80,6 +84,23 @@ class EffectRunner(
                 } else {
                     c.apply(t) { mismatches ->
                         CareLog.add(if (mismatches.isEmpty()) "🌬 공조 반영 확인" else "⚠ 공조 반영 안 됨: $mismatches")
+                    }
+                }
+            }
+            is Effect.RestoreClimate -> {
+                val b = effect.baseline
+                CareLog.add("🌬 공조 되돌리기: ${b.setTempC}℃, 풍량 ${b.fanSpeed ?: "유지"}, 풍향 ${b.fanDirection ?: "유지"}, 내기순환 ${b.recirculation ?: "유지"}")
+                val c = climate
+                if (c == null) {
+                    CareLog.add("⚠ 공조 되돌리기 불가: 차량 연결 없음")
+                } else {
+                    c.restore(b) { mismatches ->
+                        if (mismatches.isEmpty()) {
+                            CareLog.add("🌬 공조 되돌리기 확인")
+                            onClimateRestored?.invoke()
+                        } else {
+                            CareLog.add("⚠ 공조 되돌리기 안 됨: $mismatches")
+                        }
                     }
                 }
             }

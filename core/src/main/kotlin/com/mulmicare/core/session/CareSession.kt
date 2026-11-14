@@ -59,6 +59,9 @@ class CareSession(
     fun onClimateBaseline(atMs: Long, baseline: ClimateBaseline, outsideC: Float?, month: Int): List<Effect> =
         cabin.onBaseline(atMs, baseline, outsideC, month)
 
+    /** 케어를 끝낸다(정지·도착). 공조를 케어 전 상태로 되돌린다. */
+    fun end(atMs: Long): List<Effect> = cabin.onCareEnded(atMs)
+
     /** 앱이 실제로 마이크를 연 순간 (TTS가 질문을 다 말한 뒤). */
     fun onListeningStarted(atMs: Long) = voice.onListeningStarted(atMs)
 

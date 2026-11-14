@@ -20,6 +20,8 @@
 
 ## 공조 시험 전 준비
 - Virtual Console로 공조 전원을 켠다: `PUT /vehicle/hvac?power=true` (세션 신호 필요)
+- **시험 내내 세션 신호(`POST /browser/session`)를 유지한다.** 끊긴 사이 앱의 공조 설정은 반영되지 않는다
+- 온도 초기화: `PUT /vehicle/hvac?driver_temp=22&passenger_temp=22&fan_speed=3&recirc=true`
 
 ## 차량 값 바꾸는 법: Virtual Console
 - `adb forward tcp:8088 tcp:8088` → 브라우저 `http://127.0.0.1:8088/` (Cold boot 필요)

@@ -153,6 +153,12 @@ class CareSessionTest {
     }
 
     @Test
+    fun `케어를 끝내면 공조를 케어 전 기준값으로 되돌린다`() {
+        session.onClimateBaseline(0, baseline, outsideC = 28f, month = 7)
+        assertEquals(listOf<Effect>(Effect.RestoreClimate(baseline)), session.end(60_000))
+    }
+
+    @Test
     fun `F9_3 지난 이동에서 힘들어했으면 처음부터 강화 단계로 시작한다`() {
         val boosted = CareSession(t, startBoost = true)
         val start = boosted.onClimateBaseline(0, baseline, outsideC = 28f, month = 7)

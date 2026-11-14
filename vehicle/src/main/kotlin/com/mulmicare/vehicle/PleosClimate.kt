@@ -46,11 +46,12 @@ class PleosClimate internal constructor(
         var fan: Int? = null
         var fanMax: Int? = null
         var direction: FanDirectionType? = null
+        var recirculation: Boolean? = null
         val pending = AtomicInteger(5)
         val done = {
             if (pending.decrementAndGet() == 0) {
                 val baseline = temp?.let {
-                    ClimateBaseline(it, fan, fanMax, PleosClimateMapper.fromSdk(direction))
+                    ClimateBaseline(it, fan, fanMax, PleosClimateMapper.fromSdk(direction), recirculation)
                 }
                 onResult(baseline, readOutsideC())
             }
@@ -77,7 +78,8 @@ class PleosClimate internal constructor(
 
         hvac.checkHvacRecirculationCapabilities({ areas ->
             recirculationAreas = areas
-            done()
+            val area = areas.firstOrNull() ?: return@checkHvacRecirculationCapabilities done()
+            hvac.getHvacRecirculationState(area, { recirculation = it; done() }, { failed("내외기 읽기", it); done() })
         }, { failed("내외기 Capability", it); done() })
 
         hvac.checkHvacPowerCapabilities({ areas ->
@@ -129,6 +131,38 @@ class PleosClimate internal constructor(
             readBack { read ->
                 val mismatches = PleosClimateMapper.mismatches(target, read)
                 if (mismatches.isNotEmpty() && attempt == 1) apply(target, attempt = 2, onVerified) else onVerified(mismatches)
+            }
+        }, VERIFY_DELAY_MS)
+    }
+
+    /** 케어 전 상태로 되돌린다. 읽지 못했던 항목(null)은 건드리지 않는다. [onDone]에는 되돌려지지 않은 항목. */
+    fun restore(baseline: ClimateBaseline, onDone: (mismatches: List<String>) -> Unit) {
+        tempAreas.forEach {
+            hvac.setHvacTemperature(it, baseline.setTempC, TemperatureUnit.CELSIUS, onFailed = { e -> failed("온도 되돌리기", e) })
+        }
+        baseline.fanSpeed?.let { fan ->
+            fanAreas.keys.forEach { hvac.setHvacFanSpeed(it, fan, onFailed = { e -> failed("풍량 되돌리기", e) }) }
+        }
+        baseline.fanDirection?.let { d ->
+            directionAreas.forEach {
+                hvac.setHvacFanDirection(it, PleosClimateMapper.toSdk(d), onFailed = { e -> failed("풍향 되돌리기", e) })
+            }
+        }
+        baseline.recirculation?.let { r ->
+            recirculationAreas.forEach { hvac.setHvacRecirculation(it, r, onFailed = { e -> failed("내외기 되돌리기", e) }) }
+        }
+
+        main.postDelayed({
+            readBack { read ->
+                val asTarget = ClimateTarget(
+                    setTempC = baseline.setTempC,
+                    outsideAir = baseline.recirculation?.not() ?: true,
+                    fanSpeed = baseline.fanSpeed,
+                    fanDirection = baseline.fanDirection,
+                )
+                val mismatches = PleosClimateMapper.mismatches(asTarget, read)
+                    .filterNot { it == "외기" && baseline.recirculation == null }
+                onDone(mismatches)
             }
         }, VERIFY_DELAY_MS)
     }

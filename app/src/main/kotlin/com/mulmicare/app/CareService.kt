@@ -14,7 +14,10 @@ import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
+import android.os.Looper
 import android.os.SystemClock
+import com.mulmicare.core.care.BaselineResolver
+import com.mulmicare.core.care.ClimateBaseline
 import com.mulmicare.core.effect.Effect
 import com.mulmicare.core.session.CareSession
 import com.mulmicare.core.signal.VehicleSignal
@@ -33,6 +36,9 @@ class CareService : Service() {
     private lateinit var runner: EffectRunner
 
     private var session: CareSession? = null
+    private lateinit var climateStore: ClimateStore
+    private var climateBaseline: ClimateBaseline? = null
+    private val main = Handler(Looper.getMainLooper())
     private var source: PleosVehicleSource? = null
     private var debugReceiver: BroadcastReceiver? = null
     private var signalCount = 0L
@@ -48,6 +54,7 @@ class CareService : Service() {
         super.onCreate()
         thread = HandlerThread("care").apply { start() }
         handler = Handler(thread.looper)
+        climateStore = ClimateStore(this)
         runner = EffectRunner(
             this,
             onListeningStarted = { handler.post { session?.onListeningStarted(now()) } },
@@ -101,13 +108,18 @@ class CareService : Service() {
     private fun readClimateBaseline() {
         val climate = source?.climate ?: return
         runner.climate = climate
-        climate.readBaseline { baseline, outsideC ->
+        runner.onClimateRestored = { climateStore.clear() }
+        climate.readBaseline { read, outsideC ->
             handler.post {
                 val s = session ?: return@post
-                if (baseline == null) {
+                if (read == null) {
                     CareLog.add("⚠ 공조 기준값을 읽지 못해 실내 케어를 하지 않음")
                     return@post
                 }
+                // 지난 케어가 공조를 되돌리지 못하고 끝났으면 저장해 둔 기준값을 쓴다 (온도가 계속 내려가는 것 방지)
+                val baseline = BaselineResolver.resolve(read, climateStore.load())
+                if (baseline != read) CareLog.add("공조 기준값: 되돌려지지 않은 ${read.setTempC}℃ 대신 저장해 둔 기준값 사용")
+                climateBaseline = baseline
                 val month = java.util.Calendar.getInstance().get(java.util.Calendar.MONTH) + 1
                 CareLog.add("공조 기준값: $baseline, 바깥 ${outsideC ?: "모름"}℃, ${month}월")
                 dispatch(s.onClimateBaseline(now(), baseline, outsideC, month))
@@ -117,10 +129,16 @@ class CareService : Service() {
 
     private fun stopCare() {
         handler.removeCallbacks(tick)
-        runner.climate = null
-        source?.stop()
+        // 공조를 케어 전 상태로 되돌리고, 되돌리기 확인이 끝날 때까지 차량 연결을 잠시 유지한다
+        session?.let { dispatch(it.end(now())) }
+        val closing = source
+        main.postDelayed({
+            runner.climate = null
+            closing?.stop()
+        }, CLOSE_DELAY_MS)
         source = null
         session = null
+        climateBaseline = null
         debugReceiver?.let { unregisterReceiver(it) }
         debugReceiver = null
         CareLog.add("케어 끝")
@@ -154,6 +172,10 @@ class CareService : Service() {
     private fun changedBy(last: Float?, now: Float, step: Float) = last == null || kotlin.math.abs(now - last) >= step
 
     private fun dispatch(effects: List<Effect>) {
+        // 앱이 맞춘 온도를 기록해 둔다. 되돌리지 못하고 끝나도 다음 케어가 원래 기준값을 찾을 수 있다
+        effects.filterIsInstance<Effect.ApplyClimate>().lastOrNull()?.let { apply ->
+            climateBaseline?.let { climateStore.save(it, apply.target.setTempC) }
+        }
         runner.run(effects)
         if (Effect.FindRestStop in effects) {
             // 쉼터 데이터(F7.4)가 아직 없어 "없음"으로 돌려준다
@@ -174,6 +196,10 @@ class CareService : Service() {
                             CareLog.add("(adb) 말함: $text")
                             dispatch(s.onSpeech(now(), text))
                         }
+                        ACTION_DEBUG_STOP -> {
+                            CareLog.add("(adb) 케어 정지")
+                            stopSelf()
+                        }
                         ACTION_DEBUG_SPEAK -> runner.run(listOf(Effect.Speak(intent.getStringExtra("text").orEmpty())))
                         ACTION_DEBUG_STRUGGLE -> {
                             CareLog.add("(adb) 힘들어해요 버튼")
@@ -187,6 +213,7 @@ class CareService : Service() {
             addAction(ACTION_DEBUG_SAY)
             addAction(ACTION_DEBUG_STRUGGLE)
             addAction(ACTION_DEBUG_SPEAK)
+            addAction(ACTION_DEBUG_STOP)
         }
         registerReceiver(receiver, filter, RECEIVER_EXPORTED)
         debugReceiver = receiver
@@ -213,10 +240,12 @@ class CareService : Service() {
         const val ACTION_DEBUG_SAY = "com.mulmicare.DEBUG_SAY"
         const val ACTION_DEBUG_STRUGGLE = "com.mulmicare.DEBUG_STRUGGLE"
         const val ACTION_DEBUG_SPEAK = "com.mulmicare.DEBUG_SPEAK"
+        const val ACTION_DEBUG_STOP = "com.mulmicare.DEBUG_STOP"
 
         private const val CHANNEL_ID = "care"
         private const val NOTIFICATION_ID = 1
         private const val TICK_MS = 1_000L
         private const val CLIMATE_READ_DELAY_MS = 2_000L
+        private const val CLOSE_DELAY_MS = 3_000L
     }
 }
