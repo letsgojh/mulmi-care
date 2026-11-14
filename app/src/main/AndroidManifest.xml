@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-feature
+        android:name="android.hardware.type.automotive"
+        android:required="true" />
+
+    <!-- 차량 신호. 이유는 .claude/skills/pleos-sdk/references/permissions.md (S10) -->
+    <uses-permission android:name="pleos.car.permission.CAR_DRIVE" />
+    <uses-permission android:name="pleos.car.permission.CAR_LIGHTS" />
+    <uses-permission android:name="android.car.permission.CAR_SPEED" />
+    <uses-permission android:name="android.car.permission.CAR_POWERTRAIN" />
+
+    <!-- 음성 출력 (Pleos TextToSpeech SDK) -->
+    <uses-permission android:name="pleos.car.permission.TTS_SERVICE" />
+    <!-- 짧은 음성 응답 인식 (Pleos SpeechToText SDK). 질문 직후와 놀이 중에만 듣는다 (F3.6) -->
+    <uses-permission android:name="pleos.car.permission.STT_SERVICE" />
+
+    <!-- 앱이 화면에 없어도 차량 신호를 받고 소리를 내기 위한 포그라운드 서비스 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
+    <application
+        android:allowBackup="false"
+        android:label="멀미케어">
+
+        <uses-library
+            android:name="android.car"
+            android:required="false" />
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".CareService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="뒷자리 동승자 케어: 주행 중 차량 신호를 받아 소리로 안내" />
+        </service>
+    </application>
+</manifest>

@@ -1,0 +1,24 @@
+# 개인정보가 담긴 원본 기획서
+*.docx
+~$*
+
+# Gradle / Android
+.gradle/
+build/
+local.properties
+*.apk
+*.aab
+captures/
+.externalNativeBuild/
+.cxx/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Claude local
+.claude/settings.local.json
+
+# Kotlin 컴파일 캐시
+.kotlin/
