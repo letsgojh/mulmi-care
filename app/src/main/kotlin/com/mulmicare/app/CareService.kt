@@ -22,7 +22,17 @@ import com.mulmicare.core.effect.Effect
 import com.mulmicare.core.place.NaviTurn
 import com.mulmicare.core.place.RestStopAhead
 import com.mulmicare.core.session.CareOffer
+import com.mulmicare.app.ui.CareUi
+import com.mulmicare.core.session.BackseatRating
 import com.mulmicare.core.session.CareSession
+import com.mulmicare.core.session.NextTripPolicy
+import com.mulmicare.core.session.Screen
+import com.mulmicare.core.session.TripReport
+import com.mulmicare.core.signal.GearPos
+import com.mulmicare.core.signal.Side
+import com.mulmicare.core.voice.Passenger
+import com.mulmicare.core.voice.VoiceLines
+import com.mulmicare.core.voice.VoiceSettings
 import com.mulmicare.core.signal.VehicleSignal
 import com.mulmicare.vehicle.PleosNavi
 import com.mulmicare.vehicle.PleosVehicleSource
@@ -52,6 +62,10 @@ class CareService : Service() {
     private val offer = CareOffer()
 
     private var session: CareSession? = null
+    private lateinit var tripStore: TripStore
+    private var lastGear: GearPos? = null
+    /** 주행 중에 케어가 끝나 아직 못 보여 준 리포트(F9.1). 정차하면 띄운다. */
+    private var pendingReport: Screen.Report? = null
     private var latestTurns: List<NaviTurn> = emptyList()
     private var climateBaseline: ClimateBaseline? = null
     private var signalCount = 0L
@@ -68,6 +82,8 @@ class CareService : Service() {
         thread = HandlerThread("care").apply { start() }
         handler = Handler(thread.looper)
         climateStore = ClimateStore(this)
+        tripStore = TripStore(this)
+        CareUi.update { it.copy(decoration = tripStore.decoration) }
         runner = EffectRunner(
             this,
             onListeningStarted = {
@@ -82,9 +98,15 @@ class CareService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_STOP) {
-            stopSelf()
-            return START_NOT_STICKY
+        when (intent?.action) {
+            ACTION_STOP -> {
+                stopSelf()
+                return START_NOT_STICKY
+            }
+            in UI_ACTIONS -> {
+                handler.post { handleUi(intent!!) }
+                return START_NOT_STICKY
+            }
         }
         startForeground(NOTIFICATION_ID, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         handler.post {
@@ -166,15 +188,41 @@ class CareService : Service() {
 
     private fun beginCare() {
         if (session != null) return
-        session = CareSession()
+        val choice = CareUi.state.setup
+        // F9.3 지난 이동에서 힘들어했으면 처음부터 강화 단계로
+        val last = tripStore.lastStruggles?.let { TripReport(emptyList(), it) }
+        val boost = NextTripPolicy.startBoost(last, tripStore.lastRating)
+        session = CareSession(
+            settings = VoiceSettings(choice.passenger, choice.proposePlay),
+            startBoost = boost,
+            previousStars = tripStore.totalStars,
+        )
+        runner.setTheme(choice.theme)
+        CareUi.update { it.copy(caring = true) }
+        // F2.1 처음 쓸 때만, 정차 중에, 아이가 탈 때 30초 연습
+        if (!tripStore.practiceDone && choice.passenger == Passenger.CHILD && lastGear == GearPos.P) {
+            CareUi.show(CareUi.Page.Practice)
+            bringToFront()
+        } else {
+            CareUi.show(CareUi.Page.Home)
+        }
         // 공조 기준값은 차량 서비스 연결을 잠시 기다린 뒤 읽는다 (F6)
         handler.postDelayed({ readClimateBaseline() }, CLIMATE_READ_DELAY_MS)
-        CareLog.add("케어 시작")
+        CareLog.add("케어 시작: $choice${if (boost) ", 지난 이동 기록으로 강화 단계부터" else ""}")
     }
 
     private fun endCare() {
         val s = session ?: return
-        dispatch(s.end(now())) // 공조를 케어 전 상태로 되돌린다
+        val report = s.report
+        val effects = s.end(now()) // 공조를 케어 전 상태로 되돌리고, 정차 중이면 리포트 화면(F9)
+        dispatch(effects)
+        // 주행 중에 끝났으면(도착 직후 등) 리포트는 정차한 뒤에 보여 준다 (S1)
+        if (effects.none { it is Effect.ShowScreen }) {
+            pendingReport = s.reportScreen()
+            CareLog.add("리포트는 정차한 뒤에 보여 줌 (S1)")
+        }
+        tripStore.saveTrip(report)
+        CareUi.update { it.copy(caring = false) }
         session = null
         climateBaseline = null
         CareLog.add("케어 끝")
@@ -205,6 +253,13 @@ class CareService : Service() {
 
     private fun feed(signal: VehicleSignal) {
         logSignal(signal)
+        if (signal is VehicleSignal.Gear && signal.pos != lastGear) {
+            lastGear = signal.pos
+            // 주행 중에는 멀미케어 화면을 쓰지 않는다 (S1). 케어 전 대기 중에도 마찬가지
+            CareUi.update { it.copy(driving = signal.pos != GearPos.P) }
+            if (signal.pos != GearPos.P && CareUi.visible) leaveScreen()
+            if (signal.pos == GearPos.P) pendingReport?.let { pendingReport = null; showScreen(it) }
+        }
         dispatch(offer.onSignal(signal))
         session?.let { dispatch(it.onSignal(signal)) }
     }
@@ -221,11 +276,93 @@ class CareService : Service() {
             climateBaseline?.let { climateStore.save(it, apply.target.setTempC) }
         }
         runner.run(effects)
+        effects.forEach { effect ->
+            when (effect) {
+                is Effect.ShowScreen -> showScreen(effect.screen)
+                Effect.HideScreen -> CareUi.update { it.copy(driving = true, page = CareUi.Page.Home) }
+                else -> Unit
+            }
+        }
+        // F1.1 출발 전 케어 제안은 설정 카드와 함께 (정차 중에만 묻는다)
+        if (effects.any { it is Effect.Speak && it.text == VoiceLines.OFFER_CARE }) {
+            CareUi.show(CareUi.Page.Setup)
+            bringToFront()
+        }
         if (Effect.StartCare in effects) beginCare()
         if (Effect.FindRestStop in effects) findRestStop()
         effects.filterIsInstance<Effect.AddWaypoint>().forEach { add ->
             val stop = add.stop
             if (stop.latitude != null && stop.longitude != null) navi?.addWaypoint(stop.latitude!!, stop.longitude!!, stop.name)
+        }
+    }
+
+    private fun showScreen(screen: Screen) {
+        val page = when (screen) {
+            is Screen.VoyageMap -> CareUi.Page.Voyage(screen)
+            is Screen.Report -> CareUi.Page.Report(screen)
+        }
+        if (lastGear != GearPos.P) {
+            // 기어를 모르거나 주행 중이면 띄우지 않는다 (S1)
+            CareLog.add("⚠ 주행 중이라 화면을 띄우지 않음: ${screen::class.simpleName}")
+            return
+        }
+        CareUi.update { it.copy(page = page, driving = false) }
+        bringToFront()
+    }
+
+    /** 정차 중 화면을 앞으로 띄운다. 차량 OS가 막으면(주행 중 등) 그냥 둔다. */
+    private fun bringToFront() {
+        runCatching {
+            startActivity(
+                Intent(this, MainActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT),
+            )
+        }.onFailure { CareLog.add("⚠ 화면을 앞으로 띄우지 못함: ${it.message}") }
+    }
+
+    /**
+     * 주행이 시작됐는데 멀미케어 화면이 앞에 있으면 차량 홈(내비)으로 돌린다 (S1).
+     * 차량 OS는 주행 중 일반 앱을 차단 화면으로 덮기만 하므로, 내비가 보이도록 직접 비켜 준다.
+     */
+    private fun leaveScreen() {
+        val navi = packageManager.getLaunchIntentForPackage(PLEOS_NAVI_PACKAGE)
+        val target = navi ?: Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        runCatching { startActivity(target.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            .onSuccess { CareLog.add("🖥 주행 시작: ${if (navi != null) "내비" else "홈"} 화면으로 비켜 줌 (S1)") }
+            .onFailure { CareLog.add("⚠ 화면을 비키지 못함: ${it.message}") }
+    }
+
+    /** 화면 버튼 동작. */
+    private fun handleUi(intent: Intent) {
+        when (intent.action) {
+            ACTION_UI_SPEAK -> runner.run(listOf(Effect.Speak(intent.getStringExtra("text").orEmpty())))
+            ACTION_UI_CUE -> {
+                val side = runCatching { Side.valueOf(intent.getStringExtra("side").orEmpty()) }.getOrNull() ?: return
+                runner.run(listOf(Effect.PlaySideCue(side, withVoice = false)))
+            }
+            ACTION_PRACTICE_DONE -> {
+                tripStore.practiceDone = true
+                CareUi.show(CareUi.Page.Home)
+            }
+            ACTION_SHOW_VOYAGE -> {
+                val s = session ?: return
+                if (lastGear == GearPos.P) showScreen(s.voyageMap()) else CareLog.add("항해 지도는 정차 중에만 (S1)")
+            }
+            ACTION_DECORATE -> {
+                val name = intent.getStringExtra("name") ?: return
+                tripStore.decoration = name
+                CareUi.update { it.copy(decoration = name) }
+            }
+            ACTION_RATE -> {
+                val rating = runCatching { BackseatRating.valueOf(intent.getStringExtra("rating").orEmpty()) }.getOrNull() ?: return
+                tripStore.saveRating(rating)
+                CareLog.add("뒷자리 평가: $rating (다음 이동에 반영, F9.3)")
+            }
+            ACTION_CLEAR_RECORDS -> {
+                tripStore.clear()
+                CareUi.update { it.copy(decoration = null) }
+                CareLog.add("이동 기록을 지움")
+            }
         }
     }
 
@@ -333,6 +470,21 @@ class CareService : Service() {
     companion object {
         /** 대기 단계로 시작한다(내비 경로를 기다렸다가 제안). */
         const val ACTION_START = "com.mulmicare.app.START"
+
+        /** Pleos Connect 기본 내비 앱. 주행이 시작되면 이 화면이 보이게 한다. */
+        private const val PLEOS_NAVI_PACKAGE = "ai.umos.maps.android.navigation.app"
+
+        // 화면 버튼 동작
+        const val ACTION_UI_SPEAK = "com.mulmicare.app.UI_SPEAK"
+        const val ACTION_UI_CUE = "com.mulmicare.app.UI_CUE"
+        const val ACTION_PRACTICE_DONE = "com.mulmicare.app.PRACTICE_DONE"
+        const val ACTION_SHOW_VOYAGE = "com.mulmicare.app.SHOW_VOYAGE"
+        const val ACTION_DECORATE = "com.mulmicare.app.DECORATE"
+        const val ACTION_RATE = "com.mulmicare.app.RATE"
+        const val ACTION_CLEAR_RECORDS = "com.mulmicare.app.CLEAR_RECORDS"
+        private val UI_ACTIONS = setOf(
+            ACTION_UI_SPEAK, ACTION_UI_CUE, ACTION_PRACTICE_DONE, ACTION_SHOW_VOYAGE, ACTION_DECORATE, ACTION_RATE, ACTION_CLEAR_RECORDS,
+        )
 
         /** 바로 케어를 시작한다("케어 시작" 버튼). */
         const val ACTION_START_CARE = "com.mulmicare.app.START_CARE"

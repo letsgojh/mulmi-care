@@ -155,7 +155,8 @@ class CareSessionTest {
     @Test
     fun `케어를 끝내면 공조를 케어 전 기준값으로 되돌린다`() {
         session.onClimateBaseline(0, baseline, outsideC = 28f, month = 7)
-        assertEquals(listOf<Effect>(Effect.RestoreClimate(baseline)), session.end(60_000))
+        // 도착 리포트 화면(F9.1)도 함께 나오므로 공조 되돌리기만 골라 본다
+        assertEquals(listOf(Effect.RestoreClimate(baseline)), session.end(60_000).filterIsInstance<Effect.RestoreClimate>())
     }
 
     @Test

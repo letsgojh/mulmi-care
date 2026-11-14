@@ -4,6 +4,7 @@ import com.mulmicare.core.care.CareLevel
 import com.mulmicare.core.care.ClimateBaseline
 import com.mulmicare.core.care.ClimateTarget
 import com.mulmicare.core.place.RestStop
+import com.mulmicare.core.session.Screen
 import com.mulmicare.core.signal.Side
 import com.mulmicare.core.voice.VoiceIntent
 
@@ -46,6 +47,12 @@ sealed interface Effect {
 
     /** F6 공조를 목표값으로 맞춘다. app은 요청 뒤 상태를 다시 읽어 반영됐는지 확인한다(F6.8). */
     data class ApplyClimate(val level: CareLevel, val target: ClimateTarget) : Effect
+
+    /** F8 정차 중 화면을 띄운다. core는 P단일 때만 이것을 낸다(S1). */
+    data class ShowScreen(val screen: Screen) : Effect
+
+    /** F8.1 출발하면 화면을 내린다. */
+    data object HideScreen : Effect
 
     /** F1.4 출발 전 제안에 "응"이라고 답함. app이 케어(CareSession)를 시작한다. */
     data object StartCare : Effect

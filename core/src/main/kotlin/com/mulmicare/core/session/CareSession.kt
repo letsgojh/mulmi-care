@@ -6,6 +6,7 @@ import com.mulmicare.core.config.Thresholds
 import com.mulmicare.core.effect.Effect
 import com.mulmicare.core.place.RestStop
 import com.mulmicare.core.signal.CurveSegmentDetector
+import com.mulmicare.core.signal.GearPos
 import com.mulmicare.core.signal.SegmentEvent
 import com.mulmicare.core.signal.SideCueGenerator
 import com.mulmicare.core.signal.StarJudge
@@ -25,7 +26,17 @@ class CareSession(
     settings: VoiceSettings = VoiceSettings(),
     /** F9.3 지난 이동에서 자주 힘들어했으면 true. */
     startBoost: Boolean = false,
+    /** F5.8 지난 이동들까지 모은 별. */
+    private val previousStars: Int = 0,
 ) {
+    private val rounds = mutableListOf<RoundRecord>()
+    private var roundStartedAtMs: Long? = null
+    private var struggles = 0
+    private var gear: GearPos? = null
+
+    /** 지금까지의 이동 기록 (F9.1). */
+    val report: TripReport get() = TripReport(rounds.toList(), struggles)
+
     private val detector = CurveSegmentDetector(t)
     private val voice = VoiceFlow(t, settings)
     private val cues = SideCueGenerator(t)
@@ -49,6 +60,7 @@ class CareSession(
                 null -> Unit
             }
             addAll(cabin.onTick(signal.atMs))
+            if (signal is VehicleSignal.Gear) addAll(onGear(signal.pos))
         }
         return follow(signal.atMs, effects)
     }
@@ -59,8 +71,38 @@ class CareSession(
     fun onClimateBaseline(atMs: Long, baseline: ClimateBaseline, outsideC: Float?, month: Int): List<Effect> =
         cabin.onBaseline(atMs, baseline, outsideC, month)
 
-    /** 케어를 끝낸다(정지·도착). 공조를 케어 전 상태로 되돌린다. */
-    fun end(atMs: Long): List<Effect> = cabin.onCareEnded(atMs)
+    /**
+     * 케어를 끝낸다(정지·도착). 공조를 케어 전 상태로 되돌린다.
+     * 리포트 화면은 정차(P단) 중일 때만 띄운다(S1). 주행 중이면 [reportScreen]을 앱이 보관했다가 정차 뒤에 보여 준다.
+     */
+    fun end(atMs: Long): List<Effect> {
+        val restore = cabin.onCareEnded(atMs)
+        return if (gear == GearPos.P) restore + Effect.ShowScreen(reportScreen()) else restore
+    }
+
+    /** F9.1 이번 이동의 리포트. */
+    fun reportScreen(): Screen.Report {
+        val total = previousStars + report.starsKept
+        return Screen.Report(report, total, Rewards.unlocked(total))
+    }
+
+    /** F8.2 지금까지의 항해 지도. 띄우는 것은 정차 중일 때만(S1). */
+    fun voyageMap(): Screen.VoyageMap {
+        val total = previousStars + report.starsKept
+        return Screen.VoyageMap(rounds.toList(), total, Rewards.unlocked(total))
+    }
+
+    /** F8 화면은 P단일 때만 띄우고, P단을 벗어나면 내린다(S1). */
+    private fun onGear(pos: GearPos): List<Effect> {
+        val previous = gear
+        if (pos == previous) return emptyList()
+        gear = pos
+        return when {
+            pos == GearPos.P -> listOf(Effect.ShowScreen(voyageMap()))
+            previous == GearPos.P -> listOf(Effect.HideScreen)
+            else -> emptyList()
+        }
+    }
 
     /** 앱이 실제로 마이크를 연 순간 (TTS가 질문을 다 말한 뒤). */
     fun onListeningStarted(atMs: Long) = voice.onListeningStarted(atMs)
@@ -81,12 +123,18 @@ class CareSession(
                 Effect.StartBeat -> {
                     cues.startPlay()
                     stars.startRound()
+                    roundStartedAtMs = atMs
                 }
                 Effect.StopBeat -> {
                     cues.stopPlay()
-                    stars.endRound()
+                    // F5.1 한 판 기록 ("그만"으로 끝낸 판도 그때까지 지킨 별로)
+                    rounds += RoundRecord(stars.endRound(), roundStartedAtMs ?: atMs, atMs)
+                    roundStartedAtMs = null
                 }
-                Effect.PassengerStruggling -> extra += cabin.onPassengerStruggling(atMs)
+                Effect.PassengerStruggling -> {
+                    struggles++
+                    extra += cabin.onPassengerStruggling(atMs)
+                }
                 else -> Unit
             }
         }

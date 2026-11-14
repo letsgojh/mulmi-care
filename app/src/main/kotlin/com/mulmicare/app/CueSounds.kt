@@ -16,7 +16,15 @@ class CueSounds {
     private val right = track(tone(listOf(880f to 140), pan = 1f))
     private val starLost = track(tone(listOf(660f to 90, 440f to 160), pan = 0f))
     private val chime = track(tone(listOf(523f to 120, 784f to 200), pan = 0f))
-    private val beat = track(beatBar(), loop = true)
+    private var beat = track(beatBar(BASE_FREQ.getValue("바다")), loop = true)
+
+    /** F1.3 음악 테마: 테마마다 비트의 음 높이를 바꾼다(1차는 단순한 형태). */
+    fun setTheme(theme: String) {
+        val freq = BASE_FREQ[theme] ?: return
+        val old = beat
+        beat = track(beatBar(freq), loop = true)
+        old.release()
+    }
 
     fun side(side: Side) = replay(if (side == Side.LEFT) left else right)
 
@@ -60,11 +68,11 @@ class CueSounds {
     }
 
     /** 120 BPM 한 마디(2초): 첫 박은 낮고 강하게, 나머지는 높고 약하게. */
-    private fun beatBar(): ShortArray {
+    private fun beatBar(base: Float): ShortArray {
         val beatFrames = RATE / 2
         val bar = ShortArray(beatFrames * 4 * 2)
         repeat(4) { b ->
-            val click = tone(listOf((if (b == 0) 220f else 440f) to 60), pan = 0f, volume = if (b == 0) 0.35f else 0.2f)
+            val click = tone(listOf((if (b == 0) base else base * 2) to 60), pan = 0f, volume = if (b == 0) 0.35f else 0.2f)
             click.copyInto(bar, destinationOffset = b * beatFrames * 2)
         }
         return bar
@@ -95,5 +103,6 @@ class CueSounds {
 
     private companion object {
         const val RATE = 44_100
+        val BASE_FREQ = mapOf("바다" to 220f, "숲" to 262f, "우주" to 196f)
     }
 }

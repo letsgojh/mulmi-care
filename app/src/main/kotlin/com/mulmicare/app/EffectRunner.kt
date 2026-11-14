@@ -105,12 +105,17 @@ class EffectRunner(
                 }
             }
             Effect.StartCare -> CareLog.add("✅ 케어를 켜기로 함") // 실제 시작은 CareService가 한다
+            is Effect.ShowScreen -> CareLog.add("🖥 화면: ${effect.screen::class.simpleName}") // 화면 전환은 CareService가 한다
+            Effect.HideScreen -> CareLog.add("🖥 화면 내림 (주행 중)")
             Effect.FindRestStop -> CareLog.add("🔎 쉼터 찾기")
             is Effect.AddWaypoint -> CareLog.add("📍 경유지 추가: ${effect.stop.name}") // 실제 추가는 CareService가 내비로 한다
         }
     }
 
     private fun speak(text: String) = speaker.speak(text)
+
+    /** F1.3 음악 테마. */
+    fun setTheme(theme: String) = sounds.setTheme(theme)
 
     fun release() {
         sounds.release()

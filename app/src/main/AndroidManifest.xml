@@ -29,9 +29,15 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
+    <!-- 주행이 시작되면 내비 화면을 앞으로 올리기 위해 (S1) -->
+    <queries>
+        <package android:name="ai.umos.maps.android.navigation.app" />
+    </queries>
+
     <application
         android:allowBackup="false"
-        android:label="멀미케어">
+        android:label="멀미케어"
+        android:theme="@android:style/Theme.Material.Light.NoActionBar">
 
         <uses-library
             android:name="android.car"
@@ -39,7 +45,8 @@
 
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:launchMode="singleTask">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

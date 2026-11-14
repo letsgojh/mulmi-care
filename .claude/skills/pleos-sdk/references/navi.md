@@ -20,3 +20,8 @@ navi.removeListener(listener); navi.release()
   - `TurnType`: TURN_LEFT/RIGHT/KEEP_L/R/SHARP_L/R/UTURN, IC·고가·지하차도·로터리 진입/진출, TURN_TOLL, **TURN_RESTAREA(졸음쉼터)**, **TURN_ENTER_SERVICEAREA(휴게소, 하이패스센터 등 섞임)**, TURN_ARRIVE 등
 - **경로 모양(좌표 목록·곡률·도로 종류)은 주지 않는다** → 굽은 길 사전 예측 불가(2단계 과제)
 - 에뮬레이터: 경로 요청 약 10초 뒤 `onRouteStarted`. 부산역 경로 회전 안내 54개 중 휴게소·쉼터 23개.
+
+## 주행 중 화면 비키기 (에뮬레이터에서 확인, 2026-11-15)
+- Pleos 기본 내비 앱 패키지: `ai.umos.maps.android.navigation.app` (dumpsys activity로 확인)
+- 주행 중에는 AAOS가 일반 앱을 "주행 중에는 사용할 수 없습니다" 화면으로 덮기만 하고, 홈 인텐트나 `moveTaskToBack`으로는 오른쪽 화면이 내비로 바뀌지 않는다.
+- 그래서 기어가 P를 벗어날 때 우리 화면이 앞에 있으면 `getLaunchIntentForPackage(내비 패키지)`로 내비를 앞으로 올린다. 매니페스트에 `<queries><package .../></queries>` 필요(권한 아님).
