@@ -8,6 +8,14 @@ Pleos Connect(Android Automotive OS)용 Kotlin 앱입니다. 차량의 조향·�
 
 ---
 
+## 시연 영상
+
+[![멀미케어 시연 영상 미리보기: 한계령 고갯길에서 핸들을 꺾는 쪽에서 소리가 난다](docs/demo/preview.gif)](docs/demo/mulmi-care-demo.mp4)
+
+▶ **[시연 영상 전체 보기 (2분 47초, MP4)](docs/demo/mulmi-care-demo.mp4)** · 위 미리보기는 고갯길 장면 12초입니다. 소리를 켜고 보세요.
+
+---
+
 ## 제출 정보
 
 ### 1. 앱 이름 및 한 줄 소개
