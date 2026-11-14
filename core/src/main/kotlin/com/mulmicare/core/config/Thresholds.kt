@@ -62,4 +62,14 @@ data class Thresholds(
     val winterMinSetC: Float = 20f,
     /** 공조 설정 온도 단위(℃). Virtual Console 기준 0.5. */
     val setTempStepC: Float = 0.5f,
+
+    /** F1.1 내비 경로 예상 소요가 이 시간 이상이면 출발 전에 케어를 제안한다. 기획서 "30분". */
+    val careOfferMinRouteMs: Long = 30 * 60_000,
+    /** F1.1 케어 제안 뒤 답을 기다리는 시간. 임시값. */
+    val careOfferListenMs: Long = 8_000,
+
+    /** F7.2 이보다 가까운 쉼터는 안전하게 들어갈 수 없어 건너뛴다(km). 임시값. */
+    val restStopMinAheadKm: Double = 0.5,
+    /** F7.2 이보다 먼 쉼터는 제안하지 않는다(km). 임시값. */
+    val restStopMaxAheadKm: Double = 30.0,
 )

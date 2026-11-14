@@ -16,6 +16,10 @@
     <uses-permission android:name="pleos.car.permission.CONTROL_CAR_CLIMATE" />
     <uses-permission android:name="android.car.permission.CAR_EXTERIOR_ENVIRONMENT" />
 
+    <!-- 내비 연동 (Pleos NaviHelper): 경로 정보 조회, 쉼터 경유지 추가 (F1.1, F7.3) -->
+    <uses-permission android:name="pleos.car.permission.NAVI_ROUTE" />
+    <uses-permission android:name="pleos.car.permission.NAVI_ROUTE_SEARCH" />
+
     <!-- 음성 출력 (Pleos TextToSpeech SDK) -->
     <uses-permission android:name="pleos.car.permission.TTS_SERVICE" />
     <!-- 짧은 음성 응답 인식 (Pleos SpeechToText SDK). 질문 직후와 놀이 중에만 듣는다 (F3.6) -->

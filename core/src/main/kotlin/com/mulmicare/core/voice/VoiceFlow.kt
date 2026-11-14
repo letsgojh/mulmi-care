@@ -105,7 +105,8 @@ class VoiceFlow(
                 pendingRestStop = null
                 state = State.IDLE
                 if (stop != null && VoicePhrases.match(text, setOf(YES, NO)) == YES) {
-                    listOf(Effect.AddWaypoint(stop))
+                    // 좌표가 없는 쉼터(내비 회전 안내로 찾은 것)는 원래 경로 위에 있어 경유지 대신 안내만 한다(F7.3)
+                    listOf(if (stop.canBeWaypoint) Effect.AddWaypoint(stop) else Effect.Speak(VoiceLines.REST_ON_ROUTE))
                 } else {
                     emptyList()
                 }

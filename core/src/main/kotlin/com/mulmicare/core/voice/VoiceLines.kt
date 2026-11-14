@@ -8,6 +8,12 @@ object VoiceLines {
     const val PROPOSE_PLAY = "리듬 놀이 할까요?"
     const val CHECK_BACKSEAT = "뒷자리는 괜찮아요?"
 
+    /** F1.1 */
+    const val OFFER_CARE = "케어를 켤까요?"
+
+    /** F7.3 경로 위에 있는 쉼터라 경유지를 추가하지 않을 때. */
+    const val REST_ON_ROUTE = "가는 길에 있어요. 입구가 나오면 들어가세요."
+
     private val nativeCount = mapOf(1 to "한", 2 to "두", 3 to "세")
 
     /** F5.7 */

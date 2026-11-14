@@ -47,6 +47,9 @@ sealed interface Effect {
     /** F6 공조를 목표값으로 맞춘다. app은 요청 뒤 상태를 다시 읽어 반영됐는지 확인한다(F6.8). */
     data class ApplyClimate(val level: CareLevel, val target: ClimateTarget) : Effect
 
+    /** F1.4 출발 전 제안에 "응"이라고 답함. app이 케어(CareSession)를 시작한다. */
+    data object StartCare : Effect
+
     /** 케어가 끝나면 공조를 케어 전 상태로 되돌린다. null인 항목은 건드리지 않는다. */
     data class RestoreClimate(val baseline: ClimateBaseline) : Effect
 }

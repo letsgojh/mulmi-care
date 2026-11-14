@@ -32,7 +32,8 @@ class VoiceFlowTest {
     private val askPlay = listOf(Chime, Speak(VoiceLines.PROPOSE_PLAY), Listen(setOf(YES, NO), t.proposalListenMs))
     private val askCheck = listOf(Speak(VoiceLines.CHECK_BACKSEAT), Listen(setOf(OK, STRUGGLING), t.checkListenMs))
     private val startPlay = listOf(StartBeat, Listen(setOf(STOP), null))
-    private val restStop = RestStop("한빛 졸음쉼터", 8.0)
+    private val restStop = RestStop("한빛 졸음쉼터", 8.0, latitude = 36.5, longitude = 127.5)
+    private val onRouteStop = RestStop("한빛휴게소", 8.0)
 
     /** 놀이 없이 구간을 끝내고 "괜찮아요"로 답한다. */
     private fun VoiceFlow.finishSegmentCalmly(atMs: Long) {
@@ -266,6 +267,13 @@ class VoiceFlowTest {
         flow.onStruggleButton(0)
         flow.onRestStopFound(1_000, restStop)
         assertEquals(listOf(AddWaypoint(restStop)), flow.onSpeech(3_000, "응"))
+    }
+
+    @Test
+    fun `F7_3 좌표가 없는 경로 위 쉼터는 경유지 대신 들어가는 방법을 안내한다`() {
+        flow.onStruggleButton(0)
+        flow.onRestStopFound(1_000, onRouteStop)
+        assertEquals(listOf(Speak(VoiceLines.REST_ON_ROUTE)), flow.onSpeech(3_000, "응"))
     }
 
     @Test

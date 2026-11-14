@@ -18,6 +18,7 @@ description: Pleos Connect SDK(Vehicle, NaviHelper, TextToSpeech, SpeechToText, 
 - 선언 권한 목록과 이유: [references/permissions.md](references/permissions.md)
 - TextToSpeech SDK(초기화 순서 주의): [references/tts.md](references/tts.md)
 - SpeechToText SDK(마이크 열림 = onReady): [references/stt.md](references/stt.md)
+- NaviHelper SDK(경로 시간, 회전 안내, 휴게소, 경유지): [references/navi.md](references/navi.md)
 - 검증 항목 결과, **에뮬레이터 조향 값 차이(핸들각·부호 반대)**, Virtual Console HTTP API로 차량 값 바꾸기: [references/verification.md](references/verification.md)
 
 ## 문서에서 확인한 사실 (개요 페이지)

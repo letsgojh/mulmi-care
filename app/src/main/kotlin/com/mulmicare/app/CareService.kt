@@ -19,28 +19,41 @@ import android.os.SystemClock
 import com.mulmicare.core.care.BaselineResolver
 import com.mulmicare.core.care.ClimateBaseline
 import com.mulmicare.core.effect.Effect
+import com.mulmicare.core.place.NaviTurn
+import com.mulmicare.core.place.RestStopAhead
+import com.mulmicare.core.session.CareOffer
 import com.mulmicare.core.session.CareSession
 import com.mulmicare.core.signal.VehicleSignal
+import com.mulmicare.vehicle.PleosNavi
 import com.mulmicare.vehicle.PleosVehicleSource
 import com.mulmicare.vehicle.SteeringCalibration
 
 /**
- * 케어가 켜져 있는 동안 도는 포그라운드 서비스.
- * 차량 신호, 1초 Tick, 음성 응답을 모두 [handler] 스레드 하나로 모아 [CareSession]에 넣는다.
- * CareSession은 스레드 안전하지 않으므로 이 스레드 밖에서 부르지 않는다.
+ * 멀미케어 포그라운드 서비스. 두 단계로 동작한다.
+ *
+ * - 대기: 차량 신호와 내비만 받는다. 30분 이상 경로가 잡히고 P단이면 [CareOffer]가 "케어를 켤까요?"를 묻는다(F1.1).
+ * - 케어: "응" 또는 "케어 시작" 버튼으로 시작한다. [CareSession]이 놀이·실내 케어·상태 확인을 한다.
+ *   목적지에 도착하면 케어를 끝내고 공조를 되돌린 뒤 대기로 돌아간다.
+ *
+ * 차량 신호, 1초 Tick, 음성 응답, 내비 이벤트를 모두 [handler] 스레드 하나로 모은다.
+ * CareOffer와 CareSession은 스레드 안전하지 않으므로 이 스레드 밖에서 부르지 않는다.
  */
 class CareService : Service() {
 
     private lateinit var thread: HandlerThread
     private lateinit var handler: Handler
     private lateinit var runner: EffectRunner
+    private lateinit var climateStore: ClimateStore
+    private val main = Handler(Looper.getMainLooper())
+
+    private var source: PleosVehicleSource? = null
+    private var navi: PleosNavi? = null
+    private var debugReceiver: BroadcastReceiver? = null
+    private val offer = CareOffer()
 
     private var session: CareSession? = null
-    private lateinit var climateStore: ClimateStore
+    private var latestTurns: List<NaviTurn> = emptyList()
     private var climateBaseline: ClimateBaseline? = null
-    private val main = Handler(Looper.getMainLooper())
-    private var source: PleosVehicleSource? = null
-    private var debugReceiver: BroadcastReceiver? = null
     private var signalCount = 0L
 
     private val tick = object : Runnable {
@@ -57,27 +70,32 @@ class CareService : Service() {
         climateStore = ClimateStore(this)
         runner = EffectRunner(
             this,
-            onListeningStarted = { handler.post { session?.onListeningStarted(now()) } },
-            onHeard = { text -> handler.post { session?.let { dispatch(it.onSpeech(now(), text)) } } },
+            onListeningStarted = {
+                handler.post {
+                    val s = session
+                    if (s != null) s.onListeningStarted(now()) else offer.onListeningStarted(now())
+                }
+            },
+            onHeard = { text -> handler.post { hear(text) } },
         )
+        runner.onClimateRestored = { climateStore.clear() }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        when (intent?.action) {
-            ACTION_STOP -> {
-                stopSelf()
-                return START_NOT_STICKY
-            }
-            else -> {
-                startForeground(NOTIFICATION_ID, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
-                handler.post { startCare() }
-            }
+        if (intent?.action == ACTION_STOP) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        startForeground(NOTIFICATION_ID, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        handler.post {
+            startStandby()
+            if (intent?.action == ACTION_START_CARE) beginCare()
         }
         return START_NOT_STICKY
     }
 
     override fun onDestroy() {
-        handler.post { stopCare() }
+        handler.post { shutdown() }
         thread.quitSafely()
         runner.release()
         super.onDestroy()
@@ -85,9 +103,10 @@ class CareService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    private fun startCare() {
-        if (session != null) return
-        session = CareSession()
+    // --- 대기 ---
+
+    private fun startStandby() {
+        if (source != null) return
         // Pleos 에뮬레이터는 조향을 핸들 회전각·반대 부호로 준다 (pleos-sdk/references/vehicle.md)
         val onEmulator = Build.FINGERPRINT.contains("crp_avd")
         val calibration = if (onEmulator) SteeringCalibration.PLEOS_EMULATOR else SteeringCalibration.SDK_FRONT_WHEEL
@@ -98,17 +117,72 @@ class CareService : Service() {
                 onIssue = { message -> CareLog.add("⚠ $message") },
             )
         }
+        navi = PleosNavi(this, naviListener, onLog = { CareLog.add(it) }).also { it.start() }
         handler.postDelayed(tick, TICK_MS)
+        registerDebugReceiver()
+        CareLog.add("대기 시작: 내비 경로를 기다림")
+    }
+
+    private val naviListener = object : PleosNavi.Listener {
+        override fun onRouteStarted(durationSec: Int, distanceM: Int) {
+            handler.post {
+                if (session != null) return@post
+                CareLog.add("경로 예상 ${durationSec / 60}분 → 출발 전 케어 제안 판단 (F1.1)")
+                dispatch(offer.onRouteStarted(now(), durationSec))
+            }
+        }
+
+        override fun onTurns(turns: List<NaviTurn>) {
+            handler.post { latestTurns = turns }
+        }
+
+        override fun onArrived() {
+            handler.post {
+                if (session == null) return@post
+                CareLog.add("목적지 도착 → 케어 끝")
+                endCare()
+            }
+        }
+    }
+
+    private fun shutdown() {
+        handler.removeCallbacks(tick)
+        endCare()
+        navi?.stop()
+        navi = null
+        // 공조 되돌리기 확인이 끝날 때까지 차량 연결을 잠시 유지한다
+        val closing = source
+        main.postDelayed({
+            runner.climate = null
+            closing?.stop()
+        }, CLOSE_DELAY_MS)
+        source = null
+        debugReceiver?.let { unregisterReceiver(it) }
+        debugReceiver = null
+        CareLog.add("서비스 끝")
+    }
+
+    // --- 케어 ---
+
+    private fun beginCare() {
+        if (session != null) return
+        session = CareSession()
         // 공조 기준값은 차량 서비스 연결을 잠시 기다린 뒤 읽는다 (F6)
         handler.postDelayed({ readClimateBaseline() }, CLIMATE_READ_DELAY_MS)
-        registerDebugReceiver()
         CareLog.add("케어 시작")
+    }
+
+    private fun endCare() {
+        val s = session ?: return
+        dispatch(s.end(now())) // 공조를 케어 전 상태로 되돌린다
+        session = null
+        climateBaseline = null
+        CareLog.add("케어 끝")
     }
 
     private fun readClimateBaseline() {
         val climate = source?.climate ?: return
         runner.climate = climate
-        runner.onClimateRestored = { climateStore.clear() }
         climate.readBaseline { read, outsideC ->
             handler.post {
                 val s = session ?: return@post
@@ -127,27 +201,43 @@ class CareService : Service() {
         }
     }
 
-    private fun stopCare() {
-        handler.removeCallbacks(tick)
-        // 공조를 케어 전 상태로 되돌리고, 되돌리기 확인이 끝날 때까지 차량 연결을 잠시 유지한다
-        session?.let { dispatch(it.end(now())) }
-        val closing = source
-        main.postDelayed({
-            runner.climate = null
-            closing?.stop()
-        }, CLOSE_DELAY_MS)
-        source = null
-        session = null
-        climateBaseline = null
-        debugReceiver?.let { unregisterReceiver(it) }
-        debugReceiver = null
-        CareLog.add("케어 끝")
-    }
+    // --- 입력 ---
 
     private fun feed(signal: VehicleSignal) {
-        val s = session ?: return
         logSignal(signal)
-        dispatch(s.onSignal(signal))
+        dispatch(offer.onSignal(signal))
+        session?.let { dispatch(it.onSignal(signal)) }
+    }
+
+    private fun hear(text: String) {
+        val s = session
+        dispatch(if (s != null) s.onSpeech(now(), text) else offer.onSpeech(now(), text))
+    }
+
+    private fun dispatch(effects: List<Effect>) {
+        if (effects.isEmpty()) return
+        // 앱이 맞춘 온도를 기록해 둔다. 되돌리지 못하고 끝나도 다음 케어가 원래 기준값을 찾을 수 있다
+        effects.filterIsInstance<Effect.ApplyClimate>().lastOrNull()?.let { apply ->
+            climateBaseline?.let { climateStore.save(it, apply.target.setTempC) }
+        }
+        runner.run(effects)
+        if (Effect.StartCare in effects) beginCare()
+        if (Effect.FindRestStop in effects) findRestStop()
+        effects.filterIsInstance<Effect.AddWaypoint>().forEach { add ->
+            val stop = add.stop
+            if (stop.latitude != null && stop.longitude != null) navi?.addWaypoint(stop.latitude!!, stop.longitude!!, stop.name)
+        }
+    }
+
+    /** F7.2 내비 회전 안내를 새로 받아 경로 앞쪽의 휴게소·쉼터를 찾는다. */
+    private fun findRestStop() {
+        navi?.refreshTurns()
+        handler.postDelayed({
+            val s = session ?: return@postDelayed
+            val stop = RestStopAhead.find(latestTurns)
+            CareLog.add(if (stop == null) "🔎 앞쪽 30km 안에 쉼터 없음" else "🔎 쉼터: ${stop.name}, ${"%.1f".format(stop.distanceKm)}km 앞")
+            dispatch(s.onRestStopFound(now(), stop))
+        }, REST_STOP_WAIT_MS)
     }
 
     private var lastLoggedSteerDeg: Float? = null
@@ -171,49 +261,55 @@ class CareService : Service() {
 
     private fun changedBy(last: Float?, now: Float, step: Float) = last == null || kotlin.math.abs(now - last) >= step
 
-    private fun dispatch(effects: List<Effect>) {
-        // 앱이 맞춘 온도를 기록해 둔다. 되돌리지 못하고 끝나도 다음 케어가 원래 기준값을 찾을 수 있다
-        effects.filterIsInstance<Effect.ApplyClimate>().lastOrNull()?.let { apply ->
-            climateBaseline?.let { climateStore.save(it, apply.target.setTempC) }
-        }
-        runner.run(effects)
-        if (Effect.FindRestStop in effects) {
-            // 쉼터 데이터(F7.4)가 아직 없어 "없음"으로 돌려준다
-            handler.post { session?.let { dispatch(it.onRestStopFound(now(), null)) } }
-        }
-    }
-
-    /** 디버그 빌드에서만: adb로 음성 응답과 "힘들어해요" 버튼을 흉내 낸다. */
+    /** 디버그 빌드에서만: adb로 음성 응답, 버튼, 내비 경로 요청을 흉내 낸다. */
     private fun registerDebugReceiver() {
         if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0) return
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
                 handler.post {
-                    val s = session ?: return@post
                     when (intent.action) {
                         ACTION_DEBUG_SAY -> {
                             val text = intent.getStringExtra("text").orEmpty()
                             CareLog.add("(adb) 말함: $text")
-                            dispatch(s.onSpeech(now(), text))
+                            hear(text)
+                        }
+                        ACTION_DEBUG_ROUTE -> {
+                            val lat = intent.getStringExtra("lat")?.toDoubleOrNull() ?: 37.48544722
+                            val lng = intent.getStringExtra("lng")?.toDoubleOrNull() ?: 127.03636666
+                            val name = intent.getStringExtra("name") ?: "42dot"
+                            CareLog.add("(adb) 경로 요청: $name ($lat, $lng)")
+                            navi?.requestRoute(lat, lng, name)
+                        }
+                        ACTION_DEBUG_NAVI_INFO -> {
+                            CareLog.add("(adb) 내비 정보 요청")
+                            navi?.refresh()
+                        }
+                        ACTION_DEBUG_START_CARE -> {
+                            CareLog.add("(adb) 케어 시작")
+                            beginCare()
+                        }
+                        ACTION_DEBUG_END_CARE -> {
+                            CareLog.add("(adb) 케어 끝 (도착 흉내)")
+                            endCare()
                         }
                         ACTION_DEBUG_STOP -> {
-                            CareLog.add("(adb) 케어 정지")
+                            CareLog.add("(adb) 서비스 정지")
                             stopSelf()
                         }
                         ACTION_DEBUG_SPEAK -> runner.run(listOf(Effect.Speak(intent.getStringExtra("text").orEmpty())))
                         ACTION_DEBUG_STRUGGLE -> {
                             CareLog.add("(adb) 힘들어해요 버튼")
-                            dispatch(s.onStruggleButton(now()))
+                            session?.let { dispatch(it.onStruggleButton(now())) }
                         }
                     }
                 }
             }
         }
         val filter = IntentFilter().apply {
-            addAction(ACTION_DEBUG_SAY)
-            addAction(ACTION_DEBUG_STRUGGLE)
-            addAction(ACTION_DEBUG_SPEAK)
-            addAction(ACTION_DEBUG_STOP)
+            listOf(
+                ACTION_DEBUG_SAY, ACTION_DEBUG_STRUGGLE, ACTION_DEBUG_SPEAK, ACTION_DEBUG_STOP, ACTION_DEBUG_ROUTE,
+                ACTION_DEBUG_NAVI_INFO, ACTION_DEBUG_START_CARE, ACTION_DEBUG_END_CARE,
+            ).forEach(::addAction)
         }
         registerReceiver(receiver, filter, RECEIVER_EXPORTED)
         debugReceiver = receiver
@@ -227,7 +323,7 @@ class CareService : Service() {
         return Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setContentTitle("멀미케어")
-            .setContentText("뒷자리 케어 중")
+            .setContentText("뒷자리 케어 대기 중")
             .setOngoing(true)
             .build()
     }
@@ -235,17 +331,27 @@ class CareService : Service() {
     private fun now() = SystemClock.elapsedRealtime()
 
     companion object {
+        /** 대기 단계로 시작한다(내비 경로를 기다렸다가 제안). */
         const val ACTION_START = "com.mulmicare.app.START"
+
+        /** 바로 케어를 시작한다("케어 시작" 버튼). */
+        const val ACTION_START_CARE = "com.mulmicare.app.START_CARE"
         const val ACTION_STOP = "com.mulmicare.app.STOP"
+
         const val ACTION_DEBUG_SAY = "com.mulmicare.DEBUG_SAY"
         const val ACTION_DEBUG_STRUGGLE = "com.mulmicare.DEBUG_STRUGGLE"
         const val ACTION_DEBUG_SPEAK = "com.mulmicare.DEBUG_SPEAK"
         const val ACTION_DEBUG_STOP = "com.mulmicare.DEBUG_STOP"
+        const val ACTION_DEBUG_ROUTE = "com.mulmicare.DEBUG_ROUTE"
+        const val ACTION_DEBUG_NAVI_INFO = "com.mulmicare.DEBUG_NAVI_INFO"
+        const val ACTION_DEBUG_START_CARE = "com.mulmicare.DEBUG_START_CARE"
+        const val ACTION_DEBUG_END_CARE = "com.mulmicare.DEBUG_END_CARE"
 
         private const val CHANNEL_ID = "care"
         private const val NOTIFICATION_ID = 1
         private const val TICK_MS = 1_000L
         private const val CLIMATE_READ_DELAY_MS = 2_000L
         private const val CLOSE_DELAY_MS = 3_000L
+        private const val REST_STOP_WAIT_MS = 1_500L
     }
 }

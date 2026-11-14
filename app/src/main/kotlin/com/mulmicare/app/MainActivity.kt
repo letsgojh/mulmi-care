@@ -26,7 +26,7 @@ class MainActivity : Activity() {
         scroll = ScrollView(this).apply { addView(logView) }
         val buttons = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            addView(Button(context).apply { text = "케어 시작"; textSize = 22f; setOnClickListener { startCare() } })
+            addView(Button(context).apply { text = "케어 시작"; textSize = 22f; setOnClickListener { start(CareService.ACTION_START_CARE) } })
             addView(Button(context).apply { text = "케어 정지"; textSize = 22f; setOnClickListener { stopCare() } })
         }
         setContentView(
@@ -37,9 +37,10 @@ class MainActivity : Activity() {
                 addView(scroll, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
             },
         )
-        // 디버그 빌드: adb shell am start -n com.mulmicare.app/.MainActivity --ez autostart true
+        // 앱을 열면 대기 단계로 시작한다: 내비 경로가 잡히면 출발 전에 케어를 제안한다 (F1.1)
+        // 디버그 빌드: --ez autostart true 면 바로 케어를 시작한다 (시나리오 스크립트용)
         val debuggable = applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
-        if (debuggable && intent.getBooleanExtra("autostart", false)) startCare()
+        start(if (debuggable && intent.getBooleanExtra("autostart", false)) CareService.ACTION_START_CARE else CareService.ACTION_START)
     }
 
     override fun onStart() {
@@ -55,13 +56,16 @@ class MainActivity : Activity() {
         super.onStop()
     }
 
-    private fun startCare() {
+    private var pendingAction = CareService.ACTION_START
+
+    private fun start(action: String) {
         val missing = RUNTIME_PERMISSIONS.filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
         if (missing.isNotEmpty()) {
+            pendingAction = action
             requestPermissions(missing.toTypedArray(), REQUEST_PERMISSIONS)
             return
         }
-        startForegroundService(Intent(this, CareService::class.java).setAction(CareService.ACTION_START))
+        startForegroundService(Intent(this, CareService::class.java).setAction(action))
     }
 
     private fun stopCare() {
@@ -73,7 +77,7 @@ class MainActivity : Activity() {
         permissions.zip(grantResults.toTypedArray()).forEach { (p, r) ->
             CareLog.add("권한 $p: ${if (r == PackageManager.PERMISSION_GRANTED) "허용" else "거부"}")
         }
-        if (grantResults.all { it == PackageManager.PERMISSION_GRANTED }) startCare()
+        if (grantResults.all { it == PackageManager.PERMISSION_GRANTED }) start(pendingAction)
     }
 
     private companion object {

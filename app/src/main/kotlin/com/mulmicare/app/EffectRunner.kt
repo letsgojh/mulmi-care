@@ -10,7 +10,7 @@ import com.mulmicare.vehicle.PleosClimate
  *
  * 지금은 껍데기 단계라 말하기는 Pleos TTS([PleosSpeaker]), 소리는 [CueSounds], 나머지는 로그로만 처리한다.
  * - Listen: Pleos STT([PleosListener]). 디버그 빌드에서는 adb 브로드캐스트로도 응답을 넣을 수 있다(CareService 참고).
- * - FindRestStop: 쉼터 데이터(F7.4) 전. CareService가 "없음"으로 돌려준다.
+ * - FindRestStop·AddWaypoint: CareService가 내비 회전 안내로 찾고 내비에 추가한다(F7.2, F7.3).
  * - ApplyClimate: [PleosClimate]로 적용하고 다시 읽어 확인(F6.8).
  */
 class EffectRunner(
@@ -104,8 +104,9 @@ class EffectRunner(
                     }
                 }
             }
+            Effect.StartCare -> CareLog.add("✅ 케어를 켜기로 함") // 실제 시작은 CareService가 한다
             Effect.FindRestStop -> CareLog.add("🔎 쉼터 찾기")
-            is Effect.AddWaypoint -> CareLog.add("📍 경유지 추가: ${effect.stop.name} (내비 연동 미구현)")
+            is Effect.AddWaypoint -> CareLog.add("📍 경유지 추가: ${effect.stop.name}") // 실제 추가는 CareService가 내비로 한다
         }
     }
 
