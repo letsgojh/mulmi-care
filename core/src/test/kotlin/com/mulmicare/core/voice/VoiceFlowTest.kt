@@ -130,6 +130,17 @@ class VoiceFlowTest {
     }
 
     @Test
+    fun `F9_3 줄어든 간격을 받으면 그 시간 직전까지만 묻지 않고 그 뒤에는 다시 묻는다`() {
+        val short = VoiceFlow(t, VoiceSettings(), proposalCooldownMs = t.proposalCooldownAfterStruggleMs)
+        short.onSegmentStarted(0)
+        short.onSpeech(2_000, "아니")
+        short.finishSegmentCalmly(3 * min)
+        assertEquals(emptyList(), short.onSegmentStarted(2_000 + t.proposalCooldownAfterStruggleMs - 1))
+        short.finishSegmentCalmly(9 * min)
+        assertEquals(askPlay, short.onSegmentStarted(2_000 + t.proposalCooldownAfterStruggleMs))
+    }
+
+    @Test
     fun `F3_4 답이 없었을 때도 그때부터 15분 동안 다시 묻지 않는다`() {
         flow.onSegmentStarted(0)
         flow.onTick(t.proposalListenMs)

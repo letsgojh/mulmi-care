@@ -10,7 +10,7 @@ import java.nio.ByteOrder
 
 /**
  * 앱이 직접 만든 소리(F4.1). 에셋은 scripts/audio/make_sounds.py로 합성한다(assets/sounds/SOURCES.md).
- * - 비트: 테마별 120 BPM 4마디 루프(드럼·베이스·코드·멜로디)
+ * - 비트: 테마별 120 BPM 4마디 루프를 레이어 4개로 나눠 [BeatPlayer]가 섞는다(F4.4)
  * - 좌우 소리: 왼쪽은 낮은 나무 소리(내려가는 음), 오른쪽은 높은 종소리(올라가는 음).
  *   스테레오가 아닌 스피커에서도 음색과 높이로 구분된다.
  * 모두 미리 올려 두고(MODE_STATIC) 재생 때 처음으로 되감아 지연을 줄인다.
@@ -20,15 +20,18 @@ class CueSounds(private val assets: AssetManager) {
     private val right = track(load("cue_right.wav"))
     private val starLost = track(load("star_lost.wav"))
     private val chime = track(load("chime.wav"))
-    private var beat = track(load(BEAT_FILE.getValue("바다")), loop = true)
+    private val beat = BeatPlayer(stems(BEAT_NAME.getValue("바다")))
 
     /** F1.3 음악 테마: 테마마다 다른 비트(악기·조성)를 쓴다. */
     fun setTheme(theme: String) {
-        val file = BEAT_FILE[theme] ?: return
-        val old = beat
-        beat = track(load(file), loop = true)
-        old.release()
+        val name = BEAT_NAME[theme] ?: return
+        beat.setStems(stems(name))
     }
+
+    /** F4.4 악기 레이어. 다음 마디 경계에서 바뀐다. */
+    fun setLayer(layer: Int) = beat.setLayer(layer)
+
+    private fun stems(name: String) = (1..LAYERS).map { load("beat_${name}_l$it.wav") }
 
     fun side(side: Side) = replay(if (side == Side.LEFT) left else right)
 
@@ -36,14 +39,13 @@ class CueSounds(private val assets: AssetManager) {
 
     fun chime() = replay(chime)
 
-    fun startBeat() = replay(beat)
+    fun startBeat() = beat.start()
 
-    fun stopBeat() {
-        if (beat.playState == AudioTrack.PLAYSTATE_PLAYING) beat.stop()
-    }
+    fun stopBeat() = beat.stop()
 
     fun release() {
-        listOf(left, right, starLost, chime, beat).forEach { it.release() }
+        beat.stop()
+        listOf(left, right, starLost, chime).forEach { it.release() }
     }
 
     private fun replay(track: AudioTrack) {
@@ -52,7 +54,7 @@ class CueSounds(private val assets: AssetManager) {
         track.play()
     }
 
-    /** 16비트 스테레오 44.1kHz WAV에서 PCM만 읽는다. */
+    /** 16비트 44.1kHz WAV(모노·스테레오)에서 PCM만 읽는다. */
     private fun load(name: String): ShortArray {
         val bytes = assets.open("sounds/$name").use { it.readBytes() }
         val buf = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
@@ -96,6 +98,7 @@ class CueSounds(private val assets: AssetManager) {
 
     private companion object {
         const val RATE = 44_100
-        val BEAT_FILE = mapOf("바다" to "beat_sea.wav", "숲" to "beat_forest.wav", "우주" to "beat_space.wav")
+        const val LAYERS = 4
+        val BEAT_NAME = mapOf("바다" to "sea", "숲" to "forest", "우주" to "space")
     }
 }

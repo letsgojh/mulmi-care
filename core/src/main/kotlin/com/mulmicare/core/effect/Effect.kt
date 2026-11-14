@@ -36,6 +36,9 @@ sealed interface Effect {
 
     data object StopBeat : Effect
 
+    /** F4.4 악기 레이어(1 = 잔잔한 비트 … maxLayers = 모든 악기). 앱은 다음 마디 경계에서 바꾼다. */
+    data class SetLayer(val layer: Int) : Effect
+
     /** F7.2 뒷자리가 힘들어함. 세션이 받아 실내 케어를 강화 단계로 바꾼다(F6.4). */
     data object PassengerStruggling : Effect
 

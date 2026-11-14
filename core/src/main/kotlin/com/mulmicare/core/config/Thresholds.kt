@@ -30,6 +30,12 @@ data class Thresholds(
     /** F2.5 처음 이 횟수만큼은 소리와 함께 "왼쪽!"/"오른쪽!"을 말로 알린다. 기획서 "처음 몇 번". */
     val voiceCueCount: Int = 3,
 
+    /** F4.4 악기 레이어: 최근 이만큼 동안의 좌우 소리 수로 레이어를 정한다. 임시값. */
+    val layerWindowMs: Long = 30_000,
+
+    /** F4.4 레이어 수(1 = 잔잔한 비트). 소리 에셋의 레이어 수와 같아야 한다. */
+    val maxLayers: Int = 4,
+
     /** F5.3 급조향: 앞바퀴 조향 속도(°/s)가 이 값 이상. 임시값 (핸들 기준 약 210°/s). */
     val harshSteerDegPerSec: Float = 15f,
     /** F5.3 급감속(km/h per s). 구간 판단용 감속([decelEventKphPerSec])보다 강하다. 임시값. */
@@ -48,6 +54,9 @@ data class Thresholds(
     val proposalListenMs: Long = 8_000,
     /** F3.4 거절하거나 답이 없으면 이 시간 동안 다시 묻지 않는다. 기획서 "15분". */
     val proposalCooldownMs: Long = 15 * 60_000,
+
+    /** F9.3 지난 이동에서 뒷자리가 힘들어했을 때의 다시 묻지 않는 시간. 임시값. */
+    val proposalCooldownAfterStruggleMs: Long = 10 * 60_000,
     /** F7.1 뒷자리 상태 질문 뒤 답을 기다리는 시간. 임시값. */
     val checkListenMs: Long = 8_000,
     /** F7.2 쉼터 제안 뒤 답을 기다리는 시간. 임시값. */

@@ -74,6 +74,10 @@ class EffectRunner(
                 sounds.stopBeat()
                 CareLog.add("🎵 비트 끝")
             }
+            is Effect.SetLayer -> {
+                sounds.setLayer(effect.layer)
+                CareLog.add("🎵 악기 레이어 ${effect.layer}")
+            }
             Effect.PassengerStruggling -> CareLog.add("😣 뒷자리 힘들어함")
             is Effect.ApplyClimate -> {
                 val t = effect.target

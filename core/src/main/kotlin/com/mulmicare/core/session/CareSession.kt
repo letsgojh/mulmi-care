@@ -7,6 +7,7 @@ import com.mulmicare.core.effect.Effect
 import com.mulmicare.core.place.RestStop
 import com.mulmicare.core.signal.CurveSegmentDetector
 import com.mulmicare.core.signal.GearPos
+import com.mulmicare.core.signal.InstrumentLayers
 import com.mulmicare.core.signal.SegmentEvent
 import com.mulmicare.core.signal.SideCueGenerator
 import com.mulmicare.core.signal.StarJudge
@@ -38,15 +39,20 @@ class CareSession(
     val report: TripReport get() = TripReport(rounds.toList(), struggles)
 
     private val detector = CurveSegmentDetector(t)
-    private val voice = VoiceFlow(t, settings)
+    private val voice = VoiceFlow(t, settings, NextTripPolicy.proposalCooldownMs(t, startBoost)) // F9.3
     private val cues = SideCueGenerator(t)
+    private val layers = InstrumentLayers(t)
     private val stars = StarJudge(t)
     private val cabin = CabinCarePolicy(t, startBoost)
 
     fun onSignal(signal: VehicleSignal): List<Effect> {
         val effects = buildList {
             addAll(voice.onTick(signal.atMs))
-            cues.onSignal(signal)?.let(::add)
+            cues.onSignal(signal)?.let {
+                add(it)
+                layers.onCue(signal.atMs)
+            }
+            layers.onTick(signal.atMs)?.let(::add) // F4.4
             stars.onSignal(signal)?.let(::add)
             when (val segment = detector.onSignal(signal)) {
                 is SegmentEvent.Started -> {
@@ -122,11 +128,13 @@ class CareSession(
             when (effect) {
                 Effect.StartBeat -> {
                     cues.startPlay()
+                    layers.startPlay()
                     stars.startRound()
                     roundStartedAtMs = atMs
                 }
                 Effect.StopBeat -> {
                     cues.stopPlay()
+                    layers.stopPlay()
                     // F5.1 한 판 기록 ("그만"으로 끝낸 판도 그때까지 지킨 별로)
                     rounds += RoundRecord(stars.endRound(), roundStartedAtMs ?: atMs, atMs)
                     roundStartedAtMs = null

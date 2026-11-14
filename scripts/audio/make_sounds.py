@@ -161,36 +161,47 @@ MELODY = [
 ]
 
 
-def beat(theme):
+def place_mono(buf, step, sound, gain=1.0):
+    i = int(round(step * STEP * RATE))
+    end = min(len(buf), i + len(sound))
+    buf[i:end] += sound[: end - i] * gain
+    rest = sound[end - i:] * gain  # 루프 끝을 넘는 꼬리는 처음으로 감는다
+    if len(rest):
+        buf[: len(rest)] += rest
+
+
+def stems(theme):
+    """F4.4 악기 레이어 4개(모노). 1 = 킥·하이햇·베이스, 2 = +스네어·클랩·필인, 3 = +멜로디, 4 = +코드·잔타악기."""
     th = THEMES[theme]
-    buf = np.zeros((LOOP_FRAMES, 2))
+    L = [np.zeros(LOOP_FRAMES) for _ in range(4)]
     k = kick(th["heavy"])
     for bar in range(BARS):
         base = bar * 16
         for s in KICK[bar]:
-            place(buf, base + s, k, 0.95)
-        for s in SNARE:
-            place(buf, base + s, snare() if bar % 2 == 0 else clap(), 0.6)
-        if bar == BARS - 1:
-            for s in (13, 14, 15):  # 마지막 마디 끝 필인
-                place(buf, base + s, snare(), 0.35)
+            place_mono(L[0], base + s, k, 0.95)
         for s in range(0, 16, 2):
             if th["perc"] == "shaker":
-                place(buf, base + s, shaker(), 0.55 if s % 4 else 0.35, pan=0.3)
-                place(buf, base + s + 1, shaker(), 0.25, pan=0.3)
+                place_mono(L[0], base + s, shaker(), 0.55 if s % 4 else 0.35)
             else:
-                place(buf, base + s, hat(open_=(s == 14 and bar % 2 == 1)), 0.4 if s % 4 else 0.22, pan=-0.25)
+                place_mono(L[0], base + s, hat(open_=(s == 14 and bar % 2 == 1)), 0.4 if s % 4 else 0.22)
         root = note(th["roots"][bar])
         for i, s in enumerate(BASS):
-            f = root * (2 if i in (2, 5) else 1)  # 옥타브를 오가며 통통 튄다
-            place(buf, base + s, bass(f, 0.28), 0.5)
-        chord = [note(n) for n in th["chords"][bar]]
-        for s in STABS:
-            place(buf, base + s, stab(chord), 0.22, pan=0.2)
+            place_mono(L[0], base + s, bass(root * (2 if i in (2, 5) else 1), 0.28), 0.5)
+        for s in SNARE:
+            place_mono(L[1], base + s, snare() if bar % 2 == 0 else clap(), 0.6)
+        if bar == BARS - 1:
+            for s in (13, 14, 15):
+                place_mono(L[1], base + s, snare(), 0.35)
         scale = [note(n) for n in th["scale"]]
         for s, deg, ln in MELODY[bar]:
-            place(buf, base + s, th["lead"](scale[deg], ln * STEP + 0.15), 0.32, pan=-0.1)
-    return buf / np.max(np.abs(buf)) * 0.55
+            place_mono(L[2], base + s, th["lead"](scale[deg], ln * STEP + 0.15), 0.32)
+        chord = [note(n) for n in th["chords"][bar]]
+        for s in STABS:
+            place_mono(L[3], base + s, stab(chord), 0.22)
+        for s in range(1, 16, 2):  # 16분 잔타악기
+            place_mono(L[3], base + s, shaker() if th["perc"] == "hat" else hat(), 0.18)
+    gain = 0.55 / np.max(np.abs(sum(L)))  # 모든 레이어를 다 켰을 때 0.55
+    return [x * gain for x in L]
 
 
 # ---------------- 효과음 ----------------
@@ -236,7 +247,7 @@ def write(name, data):
     os.makedirs(OUT, exist_ok=True)
     pcm = (np.clip(data, -1, 1) * 32767).astype(np.int16)
     with wave.open(os.path.join(OUT, name), "wb") as w:
-        w.setnchannels(2)
+        w.setnchannels(1 if data.ndim == 1 else 2)
         w.setsampwidth(2)
         w.setframerate(RATE)
         w.writeframes(pcm.tobytes())
@@ -245,7 +256,8 @@ def write(name, data):
 
 if __name__ == "__main__":
     for th in THEMES:
-        write(f"beat_{th}.wav", beat(th))
+        for n, stem in enumerate(stems(th), start=1):
+            write(f"beat_{th}_l{n}.wav", stem)
     write("cue_left.wav", cue_left())
     write("cue_right.wav", cue_right())
     write("star_lost.wav", star_lost())

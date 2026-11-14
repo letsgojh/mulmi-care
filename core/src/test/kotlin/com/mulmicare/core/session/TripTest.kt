@@ -42,4 +42,20 @@ class TripTest {
     fun `F9_3 지난 기록이 없으면 기본 단계로 시작한다`() {
         assertFalse(NextTripPolicy.startBoost(null, null))
     }
+
+    // --- F9.3 기록이 놀이 제안 빈도에 반영된다 ---
+
+    private val t = com.mulmicare.core.config.Thresholds()
+
+    @Test
+    fun `F9_3 지난 이동에서 힘들어했으면 거절 뒤 다시 묻는 간격을 줄인다`() {
+        val cooldown = NextTripPolicy.proposalCooldownMs(t, startBoost = true)
+        assertEquals(t.proposalCooldownAfterStruggleMs, cooldown)
+        assertTrue(cooldown < t.proposalCooldownMs)
+    }
+
+    @Test
+    fun `F9_3 지난 이동이 괜찮았으면 거절 뒤 15분 동안 묻지 않는 규칙 그대로`() {
+        assertEquals(t.proposalCooldownMs, NextTripPolicy.proposalCooldownMs(t, startBoost = false))
+    }
 }

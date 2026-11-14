@@ -21,6 +21,7 @@ interface UiActions {
     fun startCare()
     fun declineOffer()
     fun skipPractice()
+    fun replayPractice()
     fun openVoyage()
     fun pickDecoration(name: String)
     fun rate(rating: BackseatRating)
@@ -55,6 +56,11 @@ object Pages {
             } else {
                 addView(Ui.button(context, "항해 지도 보기") { actions.openVoyage() })
             }
+            // F2.1 처음 이후에는 원할 때만 다시 본다 (홈은 정차 중에만 보인다)
+            addView(
+                Ui.button(context, "연습 다시 보기", primary = false) { actions.replayPractice() },
+                LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = context.dp(16) },
+            )
         })
         addView(Ui.spacer(context, 60))
         addView(Ui.body(context, "이동 기록은 이 차 안에만 저장되고 밖으로 보내지 않아요. 아이 이름이나 나이는 받지 않아요.", 18f))

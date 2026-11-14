@@ -32,6 +32,8 @@ data class VoiceSettings(
 class VoiceFlow(
     private val t: Thresholds = Thresholds(),
     private val settings: VoiceSettings = VoiceSettings(),
+    /** F3.4 거절·무응답 뒤 다시 묻지 않는 시간. F9.3 기록에 따라 줄어들 수 있다. */
+    private val proposalCooldownMs: Long = t.proposalCooldownMs,
 ) {
     private enum class State { IDLE, PROPOSING, PLAYING, CHECKING, FINDING_REST, SUGGESTING_REST }
 
@@ -168,7 +170,7 @@ class VoiceFlow(
     }
 
     private fun startProposalCooldown(fromMs: Long) {
-        proposalCooldownUntilMs = fromMs + t.proposalCooldownMs
+        proposalCooldownUntilMs = fromMs + proposalCooldownMs
     }
 
     private fun passengerStruggling(): List<Effect> {

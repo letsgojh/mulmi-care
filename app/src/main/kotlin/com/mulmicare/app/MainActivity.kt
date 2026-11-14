@@ -130,6 +130,7 @@ class MainActivity : Activity(), UiActions {
     override fun startCare() = start(CareService.ACTION_START_CARE)
     override fun declineOffer() = CareUi.show(CareUi.Page.Home)
     override fun skipPractice() = finishPractice()
+    override fun replayPractice() = CareUi.show(CareUi.Page.Practice)
     override fun openVoyage() = service(CareService.ACTION_SHOW_VOYAGE)
     override fun pickDecoration(name: String) = service(CareService.ACTION_DECORATE) { putExtra("name", name) }
     override fun rate(rating: BackseatRating) {

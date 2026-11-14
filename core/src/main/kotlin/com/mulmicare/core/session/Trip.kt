@@ -30,9 +30,13 @@ object Rewards {
     fun unlocked(totalStars: Int): List<String> = ITEMS.take((totalStars / STARS_PER_REWARD).coerceAtMost(ITEMS.size))
 }
 
-/** F9.3 지난 이동 기록을 다음 이동의 실내 케어에 반영한다. */
+/** F9.3 지난 이동 기록을 다음 이동의 실내 케어와 놀이 제안 빈도에 반영한다. */
 object NextTripPolicy {
     /** 처음부터 강화 단계로 시작할지. */
     fun startBoost(lastReport: TripReport?, rating: BackseatRating?, struggleCountForBoost: Int = 2): Boolean =
         rating == BackseatRating.STRUGGLED || (lastReport?.struggles ?: 0) >= struggleCountForBoost
+
+    /** 거절·무응답 뒤 다시 묻지 않는 시간. */
+    fun proposalCooldownMs(t: com.mulmicare.core.config.Thresholds, startBoost: Boolean): Long =
+        if (startBoost) t.proposalCooldownAfterStruggleMs else t.proposalCooldownMs
 }

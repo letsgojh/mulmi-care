@@ -6,6 +6,7 @@ import com.mulmicare.core.effect.Effect.Listen
 import com.mulmicare.core.effect.Effect.PlaySideCue
 import com.mulmicare.core.effect.Effect.Speak
 import com.mulmicare.core.effect.Effect.StarLost
+import com.mulmicare.core.effect.Effect.SetLayer
 import com.mulmicare.core.effect.Effect.StartBeat
 import com.mulmicare.core.effect.Effect.StopBeat
 import com.mulmicare.core.effect.Effect.StopListening
@@ -63,7 +64,7 @@ class ScenarioTest {
     }
 
     @Test
-    fun `SC3 굽은 국도 - F3_2 F3_3 F4_2 F4_3 F2_5 F5_3 F5_7 F7_1`() {
+    fun `SC3 굽은 국도 - F3_2 F3_3 F4_2 F4_3 F4_4 F2_5 F5_3 F5_7 F7_1`() {
         val timed = CareSession(t).drive(
             countryRoad,
             says = listOf(Say(21_500, "응"), Say(155_000, "괜찮아요")),
@@ -78,11 +79,18 @@ class ScenarioTest {
             Timed(21_500, Listen(setOf(STOP), null)),
             // 핸들이 오른쪽으로 들어서는 순간 오른쪽 (처음 3번은 말과 함께)
             Timed(25_000, PlaySideCue(RIGHT, withVoice = true)),
+            Timed(25_000, SetLayer(2)), // F4.4 회전이 이어지면 악기가 하나씩 더해진다
             // 방향지시등: 차가 돌기 전에 왼쪽. 32초의 왼쪽 조향은 같은 동작이라 다시 울리지 않는다
             Timed(30_000, PlaySideCue(LEFT, withVoice = true)),
+            Timed(30_000, SetLayer(3)),
             // 급감속 → 별 하나
             Timed(41_000, StarLost),
             Timed(45_000, PlaySideCue(RIGHT, withVoice = true)),
+            Timed(45_000, SetLayer(4)),
+            // 길이 곧아지면 소리가 30초 창을 벗어날 때마다 한 층씩 잔잔해진다
+            Timed(25_000 + t.layerWindowMs, SetLayer(3)),
+            Timed(30_000 + t.layerWindowMs, SetLayer(2)),
+            Timed(45_000 + t.layerWindowMs, SetLayer(1)),
             // 구간 끝: 별 멘트, 음악 끔, 뒷자리 확인
             Timed(152_000, StopListening),
             Timed(152_000, Speak(VoiceLines.roundFinished(2))),
