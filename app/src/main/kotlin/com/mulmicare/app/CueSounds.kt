@@ -1,28 +1,32 @@
 package com.mulmicare.app
 
+import android.content.res.AssetManager
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
 import com.mulmicare.core.signal.Side
-import kotlin.math.PI
-import kotlin.math.sin
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 /**
- * 앱이 직접 만든 임시 소리(F4.1). 정식 사운드는 rhythm-audio 단계에서 바꾼다.
- * 모두 미리 만들어 두고(MODE_STATIC) 재생 때 처음으로 되감아 지연을 줄인다.
+ * 앱이 직접 만든 소리(F4.1). 에셋은 scripts/audio/make_sounds.py로 합성한다(assets/sounds/SOURCES.md).
+ * - 비트: 테마별 120 BPM 4마디 루프(드럼·베이스·코드·멜로디)
+ * - 좌우 소리: 왼쪽은 낮은 나무 소리(내려가는 음), 오른쪽은 높은 종소리(올라가는 음).
+ *   스테레오가 아닌 스피커에서도 음색과 높이로 구분된다.
+ * 모두 미리 올려 두고(MODE_STATIC) 재생 때 처음으로 되감아 지연을 줄인다.
  */
-class CueSounds {
-    private val left = track(tone(listOf(880f to 140), pan = -1f))
-    private val right = track(tone(listOf(880f to 140), pan = 1f))
-    private val starLost = track(tone(listOf(660f to 90, 440f to 160), pan = 0f))
-    private val chime = track(tone(listOf(523f to 120, 784f to 200), pan = 0f))
-    private var beat = track(beatBar(BASE_FREQ.getValue("바다")), loop = true)
+class CueSounds(private val assets: AssetManager) {
+    private val left = track(load("cue_left.wav"))
+    private val right = track(load("cue_right.wav"))
+    private val starLost = track(load("star_lost.wav"))
+    private val chime = track(load("chime.wav"))
+    private var beat = track(load(BEAT_FILE.getValue("바다")), loop = true)
 
-    /** F1.3 음악 테마: 테마마다 비트의 음 높이를 바꾼다(1차는 단순한 형태). */
+    /** F1.3 음악 테마: 테마마다 다른 비트(악기·조성)를 쓴다. */
     fun setTheme(theme: String) {
-        val freq = BASE_FREQ[theme] ?: return
+        val file = BEAT_FILE[theme] ?: return
         val old = beat
-        beat = track(beatBar(freq), loop = true)
+        beat = track(load(file), loop = true)
         old.release()
     }
 
@@ -48,34 +52,23 @@ class CueSounds {
         track.play()
     }
 
-    /** (주파수, 길이 ms) 음들을 이어 붙인 스테레오 PCM. [pan] -1 = 왼쪽만, 1 = 오른쪽만. */
-    private fun tone(notes: List<Pair<Float, Int>>, pan: Float, volume: Float = 0.5f): ShortArray {
-        val frames = notes.sumOf { it.second * RATE / 1000 }
-        val out = ShortArray(frames * 2)
-        val leftGain = if (pan > 0) 1f - pan else 1f
-        val rightGain = if (pan < 0) 1f + pan else 1f
-        var i = 0
-        for ((freq, ms) in notes) {
-            val n = ms * RATE / 1000
-            for (k in 0 until n) {
-                val fade = minOf(1f, k / 200f, (n - k) / 200f) // 클릭 잡음 방지
-                val s = sin(2 * PI * freq * k / RATE).toFloat() * volume * fade * Short.MAX_VALUE
-                out[i++] = (s * leftGain).toInt().toShort()
-                out[i++] = (s * rightGain).toInt().toShort()
+    /** 16비트 스테레오 44.1kHz WAV에서 PCM만 읽는다. */
+    private fun load(name: String): ShortArray {
+        val bytes = assets.open("sounds/$name").use { it.readBytes() }
+        val buf = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
+        var pos = 12
+        while (pos + 8 <= bytes.size) {
+            val id = String(bytes, pos, 4, Charsets.US_ASCII)
+            val size = buf.getInt(pos + 4)
+            if (id == "data") {
+                val out = ShortArray(size / 2)
+                buf.position(pos + 8)
+                buf.asShortBuffer().get(out)
+                return out
             }
+            pos += 8 + size + (size and 1)
         }
-        return out
-    }
-
-    /** 120 BPM 한 마디(2초): 첫 박은 낮고 강하게, 나머지는 높고 약하게. */
-    private fun beatBar(base: Float): ShortArray {
-        val beatFrames = RATE / 2
-        val bar = ShortArray(beatFrames * 4 * 2)
-        repeat(4) { b ->
-            val click = tone(listOf((if (b == 0) base else base * 2) to 60), pan = 0f, volume = if (b == 0) 0.35f else 0.2f)
-            click.copyInto(bar, destinationOffset = b * beatFrames * 2)
-        }
-        return bar
+        error("WAV data 없음: $name")
     }
 
     private fun track(pcm: ShortArray, loop: Boolean = false): AudioTrack {
@@ -103,6 +96,6 @@ class CueSounds {
 
     private companion object {
         const val RATE = 44_100
-        val BASE_FREQ = mapOf("바다" to 220f, "숲" to 262f, "우주" to 196f)
+        val BEAT_FILE = mapOf("바다" to "beat_sea.wav", "숲" to "beat_forest.wav", "우주" to "beat_space.wav")
     }
 }

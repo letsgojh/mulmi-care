@@ -19,7 +19,7 @@ class EffectRunner(
     onHeard: (String) -> Unit,
 ) {
 
-    private val sounds = CueSounds()
+    private val sounds = CueSounds(context.assets)
     private val speaker = PleosSpeaker(context)
     private val listener = PleosListener(context, onListeningStarted, onHeard)
 
