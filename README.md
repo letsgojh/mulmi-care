@@ -8,6 +8,44 @@ Pleos Connect(Android Automotive OS)용 Kotlin 앱입니다. 차량의 조향·�
 
 ---
 
+## 제출 정보
+
+### 1. 앱 이름 및 한 줄 소개
+**멀미케어 (Mulmi Care)**: 굽은 길에서 차가 꺾이는 쪽을 소리로 먼저 알려 주고 실내 공기를 맞춰, 뒷자리 아이의 멀미 부담을 덜어 주는 차량용 동승자 케어 앱
+
+### 2. 실행 방법
+1. Pleos Connect 에뮬레이터를 켜고(Cold boot) APK를 설치합니다.
+   ```bash
+   adb install -r -g "apk/멀미케어_멀미케어_release.apk"
+   ```
+   `-g` 없이 설치했다면 처음 실행할 때 나오는 차량 속도 권한을 허용합니다.
+2. 앱 목록에서 **멀미케어**를 실행합니다. 앱은 백그라운드 서비스로 계속 동작하며, 홈 화면의 **케어 시작**으로 바로 켤 수도 있습니다.
+3. 기어가 P인 상태에서 Pleos 내비에 30분 넘게 걸리는 목적지(예: 오색약수)로 안내를 시작하면, 앱이 "케어를 켤까요?"라고 묻고 설정 카드를 띄웁니다. 마이크로 **"응"**이라고 하거나 **케어 시작**을 누릅니다. 처음 한 번은 30초 연습 화면이 나옵니다.
+4. Virtual Console에서 기어를 D로 바꾸고 속도를 올린 뒤 핸들을 좌우로 여러 번 돌리면(1분 안에 3번 이상), 굽은 길로 판단해 "리듬 놀이 할까요?"라고 묻습니다. "응"이라고 하면 비트가 시작되고, 핸들을 꺾는 쪽에서 소리가 납니다.
+5. 기어를 P로 바꾸면 항해 지도가 나옵니다. 목적지에 도착하면 케어가 끝나 리포트가 나오고 공조가 케어 전 상태로 돌아갑니다. 에뮬레이터 내비는 현재 위치가 고정이라 도착이 일어나지 않으므로, 디버그 빌드에서 `adb shell am broadcast -a com.mulmicare.DEBUG_END_CARE`로 도착을 흉내 냅니다.
+
+실제 한계령 도로로 주행을 재현하는 시연 스크립트(`scripts/emulator/demo.sh`)는 adb로 음성 응답을 흉내 내므로 **디버그 빌드**에서 동작합니다. 빌드 방법은 [실행](#실행)을 참고하세요.
+
+### 3. 테스트 환경 및 필요한 설정
+| 항목 | 내용 |
+|---|---|
+| 에뮬레이터 | Pleos Connect Emulator v2.1.0 (Android 14, API 34, x86_64) |
+| 차량 신호 | Virtual Console(에뮬레이터 Extended Controls 또는 `adb forward tcp:8088 tcp:8088` 후 HTTP)로 기어·속도·조향·방향지시등 조작 |
+| 공조 | Virtual Console에서 **공조 전원을 켠 상태**여야 앱의 공조 설정이 반영됩니다 |
+| 음성 | TTS·STT 모두 Pleos ON_DEVICE 모드(네트워크 불필요). 음성으로 답하려면 Extended Controls → Microphone에서 "Virtual microphone uses host audio input"을 켭니다 |
+| 권한 | 차량 신호(조향, 방향지시등, 속도, 기어), 공조 조회·제어, 외기 온도, 내비 경로·경유지, TTS·STT, 포그라운드 서비스. 목록: [AndroidManifest.xml](app/src/main/AndroidManifest.xml) |
+| 빌드 | Android Studio 내장 JDK, Gradle 9.4.1, Android Gradle Plugin 9.2.0, Kotlin 2.4.0, compile·target SDK 34 |
+
+### 4. 개발에 사용한 에뮬레이터 버전과 화면 규격
+- **Pleos Connect Emulator v2.1.0** (AVD `Pleos_Connect_v2.1.0`, system image `android-34/pleos_car_emulator/x86_64`)
+- 화면 **2560 × 1440 px, 160 dpi**(mdpi), 가로. 앱 화면은 오른쪽 메인 영역에 표시됩니다.
+
+### 5. APK 파일 위치
+- 릴리스 APK: [`apk/멀미케어_멀미케어_release.apk`](apk/멀미케어_멀미케어_release.apk) (버전 1.0.0, 릴리스 서명)
+- 시연 영상: [`docs/demo/mulmi-care-demo.mp4`](docs/demo/mulmi-care-demo.mp4) (2분 47초)
+
+---
+
 ## 왜 만들었나
 
 운전자는 차가 언제 돌고 멈출지 미리 알고 몸을 기울이기 때문에 멀미를 잘 하지 않습니다. 뒷자리 아이는 다음 움직임을 모른 채 흔들립니다. 실차 연구들에서 다가오는 움직임을 미리 알려 주거나, 도는 쪽으로 머리를 기울이거나, 앞을 볼 때 멀미가 덜한 것으로 보고되었습니다[1–3]. 다만 소수의 성인을 대상으로 한 연구여서 아이에게 그대로 적용된다고 단정할 수는 없습니다.
@@ -104,7 +142,7 @@ flowchart LR
 
 ### 테스트 (TDD)
 판단 로직은 테스트를 먼저 쓰고 구현했습니다. 경계값(기준 바로 아래·같음·바로 위)과 "하지 않는다"는 안전 규칙도 테스트로 고정했습니다.
-- core 155개: 굽은 길 구간, 좌우 소리, 별, 음성 흐름, 공조, 출발 전 제안, 쉼터 찾기, 기획서 시나리오(SC3 굽은 국도, SC4 운전 집중) 인수 테스트
+- core 170개: 굽은 길 구간, 좌우 소리, 별, 음성 흐름, 공조, 출발 전 제안, 쉼터 찾기, 기획서 시나리오(SC3 굽은 국도, SC4 운전 집중) 인수 테스트
 - vehicle 20개: SDK 값 변환(조향 보정, 기어, 속도 단위, 풍향, 회전 안내)
 
 ### 에뮬레이터 (Pleos Connect Emulator v2.1.0)
@@ -136,7 +174,8 @@ flowchart LR
 export JAVA_HOME="<Android Studio>/jbr"
 ./gradlew :core:test                       # core 판단 로직
 ./gradlew :vehicle:testDebugUnitTest       # SDK 값 변환
-./gradlew :app:assembleDebug               # APK
+./gradlew :app:assembleDebug               # 디버그 APK (시연 스크립트용)
+./gradlew :app:assembleRelease             # 릴리스 APK (keystore.properties로 서명, 없으면 서명 없이)
 adb install -r -g app/build/outputs/apk/debug/app-debug.apk
 ```
 
