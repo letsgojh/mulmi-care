@@ -190,10 +190,6 @@ adb logcat -s MulmiCare                                                    # 동
 ```
 디버그 빌드에서는 adb 브로드캐스트로 음성 응답(`com.mulmicare.DEBUG_SAY --es text 응`), 내비 경로 요청(`DEBUG_ROUTE`), "힘들어해요" 버튼(`DEBUG_STRUGGLE`), 케어 시작·끝(`DEBUG_START_CARE`, `DEBUG_END_CARE`)을 흉내 낼 수 있습니다.
 
-## 개발 방식
-
-[Claude Code](https://claude.com/claude-code)와 함께 개발했습니다. 저장소의 [`.claude/`](.claude/)에 이 프로젝트용 작업 규칙(하네스)이 있습니다. 기획서 규칙 추적, TDD 절차, Pleos SDK 사용법·검증 기록, 안전 원칙 점검, core 수정 시 테스트 자동 실행이 들어 있습니다.
-
 ## 시연
 실제 한계령(44번 국도) 도로 좌표로 주행을 재현해 시연합니다: 곧은 길에서는 조용하다가 고갯길에 들어서면 놀이를 제안하고, 커브 방향대로 좌우 소리를 냅니다. 에뮬레이터 내비는 위치를 바꿀 수 없어 같은 주행을 별도의 재현 지도에 보여 줍니다. 시나리오: [docs/demo-video.md](docs/demo-video.md)
 
