@@ -10,7 +10,7 @@ Pleos Connect(Android Automotive OS)용 Kotlin 앱입니다. 차량의 조향·�
 
 ## 시연 영상
 
-https://github.com/user-attachments/assets/7c463c3f-d54a-43f6-aac4-074a7cd7818d
+https://github.com/user-attachments/assets/6344dd1a-4bf1-4359-a58d-710901dd1fc2
 
 소리를 켜고 보세요 (2분 47초). 원본 화질: [docs/demo/mulmi-care-demo.mp4](docs/demo/mulmi-care-demo.mp4)
 
