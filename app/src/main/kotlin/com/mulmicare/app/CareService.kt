@@ -202,6 +202,7 @@ class CareService : Service() {
         // F2.1 처음 쓸 때만, 정차 중에, 아이가 탈 때 30초 연습
         if (!tripStore.practiceDone && choice.passenger == Passenger.CHILD && lastGear == GearPos.P) {
             CareUi.show(CareUi.Page.Practice)
+            CareLog.add("🖥 연습 화면 (F2)")
             bringToFront()
         } else {
             CareUi.show(CareUi.Page.Home)
@@ -342,6 +343,7 @@ class CareService : Service() {
             }
             ACTION_PRACTICE_DONE -> {
                 tripStore.practiceDone = true
+                CareLog.add("연습 끝")
                 CareUi.show(CareUi.Page.Home)
             }
             ACTION_SHOW_VOYAGE -> {

@@ -89,6 +89,11 @@ t; echo "내비 목적지: 오색약수"
 wait_log "케어를 켤까요" 30 && sleep 3
 answer "응" "케어 시작"
 wait_log "공조 BASE" 10
+# 처음 쓰는 상태(설치 직후 등)면 30초 연습 화면이 뜬다. 끝날 때까지 기다린다 (F2)
+if wait_log "연습 화면" 3 >/dev/null; then
+  t; echo "연습 화면: 소리 → 종이배 기울기"
+  wait_log "연습 끝" 40
+fi
 sleep 4
 
 scene 2 "곧은 길 — 조용히 (토막 1)"
@@ -107,10 +112,11 @@ answer "괜찮아요" "듣기 끝"
 
 scene 5 "도착 — 케어 끝, 공조를 원래대로"
 wait "$DRIVER"; DRIVER=""
-put "gear?gear=Park"; t; echo "정차, P단"
-sleep 2
+put "gear?gear=Park"; t; echo "정차, P단 — 항해 지도"
+sleep 8
 broadcast DEBUG_END_CARE ""        # 에뮬레이터 내비는 위치가 고정이라 도착 이벤트를 adb로 대신함
 t; echo "도착(재현)"
 wait_log "공조 되돌리기 확인" 12
-sleep 4
+t; echo "리포트 화면"
+sleep 8
 echo; t; echo "끝. 녹화를 멈추세요."
