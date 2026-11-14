@@ -11,6 +11,11 @@
     <uses-permission android:name="android.car.permission.CAR_SPEED" />
     <uses-permission android:name="android.car.permission.CAR_POWERTRAIN" />
 
+    <!-- 실내 자동 케어 (F6): 공조 조회·제어, 계절 판단용 바깥 기온 -->
+    <uses-permission android:name="pleos.car.permission.CAR_CLIMATE" />
+    <uses-permission android:name="pleos.car.permission.CONTROL_CAR_CLIMATE" />
+    <uses-permission android:name="android.car.permission.CAR_EXTERIOR_ENVIRONMENT" />
+
     <!-- 음성 출력 (Pleos TextToSpeech SDK) -->
     <uses-permission android:name="pleos.car.permission.TTS_SERVICE" />
     <!-- 짧은 음성 응답 인식 (Pleos SpeechToText SDK). 질문 직후와 놀이 중에만 듣는다 (F3.6) -->

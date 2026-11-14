@@ -1,5 +1,7 @@
 package com.mulmicare.core.effect
 
+import com.mulmicare.core.care.CareLevel
+import com.mulmicare.core.care.ClimateTarget
 import com.mulmicare.core.place.RestStop
 import com.mulmicare.core.signal.Side
 import com.mulmicare.core.voice.VoiceIntent
@@ -40,4 +42,7 @@ sealed interface Effect {
 
     /** F7.3 쉼터를 내비 경유지로 추가. */
     data class AddWaypoint(val stop: RestStop) : Effect
+
+    /** F6 공조를 목표값으로 맞춘다. app은 요청 뒤 상태를 다시 읽어 반영됐는지 확인한다(F6.8). */
+    data class ApplyClimate(val level: CareLevel, val target: ClimateTarget) : Effect
 }

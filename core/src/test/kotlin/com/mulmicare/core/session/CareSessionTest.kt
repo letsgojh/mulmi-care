@@ -1,6 +1,10 @@
 package com.mulmicare.core.session
 
+import com.mulmicare.core.care.CareLevel
+import com.mulmicare.core.care.ClimateBaseline
+import com.mulmicare.core.care.FanDirection
 import com.mulmicare.core.config.Thresholds
+import com.mulmicare.core.effect.Effect.ApplyClimate
 import com.mulmicare.core.effect.Effect
 import com.mulmicare.core.effect.Effect.FindRestStop
 import com.mulmicare.core.effect.Effect.Listen
@@ -124,10 +128,41 @@ class CareSessionTest {
         assertEquals(listOf(VoiceLines.roundFinished(2), VoiceLines.roundFinished(3)), rounds)
     }
 
+    private val baseline = ClimateBaseline(setTempC = 23f, fanSpeed = 3, fanSpeedMax = 8, fanDirection = FanDirection.FLOOR)
+
+    private fun List<Timed>.climate() = filter { it.effect is ApplyClimate }.map { it.atMs to (it.effect as ApplyClimate).level }
+
+    @Test
+    fun `F6_1 놀이를 하지 않아도 굽은 길 구간에 들어서면 강화 단계로 바꾸고 끝나고 5분 뒤 기본으로 돌아간다`() {
+        val start = session.onClimateBaseline(0, baseline, outsideC = 28f, month = 7)
+        assertEquals(listOf(CareLevel.BASE), start.filterIsInstance<ApplyClimate>().map { it.level })
+        val signals = trace {
+            enterCurve(10) // 20초 구간 시작, 묻기만 하고 답 없음
+            ticks(0.seconds, 600.seconds, every = 1.seconds)
+        }
+        val climate = session.drive(signals).climate()
+        // 조향 이벤트 10·15·20초 → 70초에 기준 아래 → 130초 구간 종료 → 5분 뒤 430초에 기본
+        assertEquals(listOf(20_000L to CareLevel.BOOST, 430_000L to CareLevel.BASE), climate)
+    }
+
+    @Test
+    fun `F6_4 힘들어해요 버튼을 누르면 실내 케어를 강화 단계로 바꾼다`() {
+        session.onClimateBaseline(0, baseline, outsideC = 28f, month = 7)
+        val effects = session.onStruggleButton(1_000)
+        assertTrue(effects.any { it is ApplyClimate && it.level == CareLevel.BOOST }, "$effects")
+    }
+
+    @Test
+    fun `F9_3 지난 이동에서 힘들어했으면 처음부터 강화 단계로 시작한다`() {
+        val boosted = CareSession(t, startBoost = true)
+        val start = boosted.onClimateBaseline(0, baseline, outsideC = 28f, month = 7)
+        assertEquals(listOf(CareLevel.BOOST), start.filterIsInstance<ApplyClimate>().map { it.level })
+    }
+
     @Test
     fun `F7_2 힘들어해요 요청과 쉼터 검색 결과가 세션을 거쳐 이어진다`() {
         val stop = RestStop("한빛 졸음쉼터", 8.0)
-        assertEquals(listOf<Effect>(PassengerStruggling, FindRestStop), session.onStruggleButton(0))
+        assertEquals(listOf<Effect>(PassengerStruggling, FindRestStop), session.onStruggleButton(0)) // 기준값 전이라 공조 없음
         assertEquals(
             listOf(Speak(VoiceLines.suggestRest(8.0)), Listen(setOf(YES, NO), t.restListenMs)),
             session.onRestStopFound(1_000, stop),

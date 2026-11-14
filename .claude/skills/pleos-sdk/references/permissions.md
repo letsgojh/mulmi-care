@@ -8,13 +8,15 @@ app/src/main/AndroidManifest.xml에 선언하는 권한은 이 목록과 같아�
 | `pleos.car.permission.CAR_LIGHTS` | 방향지시등 상태 수신 | F4.3 | 어댑터 구현됨 |
 | `android.car.permission.CAR_SPEED` | 차량 속도 (감속 판단). dangerous → 런타임 요청 | D1, F5.3 | 어댑터 구현됨 |
 | `android.car.permission.CAR_POWERTRAIN` | 기어(P단) 판단 | F1.1, F8 | 어댑터 구현됨 |
+| `pleos.car.permission.CAR_CLIMATE` | 공조 기준값·반영 확인 읽기 | F6 | 구현됨 |
+| `pleos.car.permission.CONTROL_CAR_CLIMATE` | 공조 온도·풍량·풍향·내외기·전원 제어 | F6 | 구현됨 |
+| `android.car.permission.CAR_EXTERIOR_ENVIRONMENT` | 바깥 기온(계절 판단) | F6.6, F6.7 | 구현됨 |
 | `pleos.car.permission.TTS_SERVICE` | 음성 출력 (Pleos TTS) | F3, F5.7, F7 | 구현됨 |
 | `pleos.car.permission.STT_SERVICE` | 짧은 음성 응답 인식 (Pleos STT). 질문 직후와 놀이 중에만 (F3.6) | F3, F7 | 구현됨 |
 | `android.permission.FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_SPECIAL_USE` | 앱이 화면에 없어도 신호 수신·소리 출력 | 검증 항목 3 | 구현됨 |
 | `android.permission.INTERNET` | **우리가 선언하지 않음. TTS·STT AAR이 합쳐 넣음.** ON_DEVICE 모드라 쓰지 않는다. 위치·기록을 보내는 코드 없음(S8) | — | SDK 유래 |
 
 ## 아직 추가하지 않은 것 (기능 구현 때 추가)
-- 공조 조회·제어 (F6): `pleos.car.permission.CAR_CLIMATE`, `pleos.car.permission.CONTROL_CAR_CLIMATE`
 - 위치 (F7 쉼터): FusedLocation SDK 문서 확인 후
 
 ## 공모전 참가자에게 승인되는지 (검증 항목 1)

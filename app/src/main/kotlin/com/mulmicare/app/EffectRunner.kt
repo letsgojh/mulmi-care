@@ -3,6 +3,7 @@ package com.mulmicare.app
 import android.content.Context
 import com.mulmicare.core.effect.Effect
 import com.mulmicare.core.signal.Side
+import com.mulmicare.vehicle.PleosClimate
 
 /**
  * core가 낸 Effect를 실제 동작으로 바꾼다. 판단은 하지 않는다.
@@ -10,7 +11,7 @@ import com.mulmicare.core.signal.Side
  * 지금은 껍데기 단계라 말하기는 Pleos TTS([PleosSpeaker]), 소리는 [CueSounds], 나머지는 로그로만 처리한다.
  * - Listen: Pleos STT([PleosListener]). 디버그 빌드에서는 adb 브로드캐스트로도 응답을 넣을 수 있다(CareService 참고).
  * - FindRestStop: 쉼터 데이터(F7.4) 전. CareService가 "없음"으로 돌려준다.
- * - PassengerStruggling: 실내 케어(F6) 전.
+ * - ApplyClimate: [PleosClimate]로 적용하고 다시 읽어 확인(F6.8).
  */
 class EffectRunner(
     context: Context,
@@ -25,6 +26,10 @@ class EffectRunner(
     /** StopListening이 오면 늘어나서, 아직 마이크를 열지 않은 듣기 요청을 취소한다. */
     @Volatile
     private var listenGeneration = 0
+
+    /** 공조 제어. 차량 연결 뒤 CareService가 넣는다. */
+    @Volatile
+    var climate: PleosClimate? = null
 
     fun run(effects: List<Effect>) = effects.forEach(::run)
 
@@ -65,7 +70,19 @@ class EffectRunner(
                 sounds.stopBeat()
                 CareLog.add("🎵 비트 끝")
             }
-            Effect.PassengerStruggling -> CareLog.add("😣 뒷자리 힘들어함 → 실내 케어 강화 (F6 미구현)")
+            Effect.PassengerStruggling -> CareLog.add("😣 뒷자리 힘들어함")
+            is Effect.ApplyClimate -> {
+                val t = effect.target
+                CareLog.add("🌬 공조 ${effect.level}: ${t.setTempC}℃, 풍량 ${t.fanSpeed ?: "유지"}, 풍향 ${t.fanDirection ?: "유지"}, ${if (t.outsideAir) "외기" else "내기"}")
+                val c = climate
+                if (c == null) {
+                    CareLog.add("⚠ 공조 제어 불가: 차량 연결 전")
+                } else {
+                    c.apply(t) { mismatches ->
+                        CareLog.add(if (mismatches.isEmpty()) "🌬 공조 반영 확인" else "⚠ 공조 반영 안 됨: $mismatches")
+                    }
+                }
+            }
             Effect.FindRestStop -> CareLog.add("🔎 쉼터 찾기")
             is Effect.AddWaypoint -> CareLog.add("📍 경유지 추가: ${effect.stop.name} (내비 연동 미구현)")
         }

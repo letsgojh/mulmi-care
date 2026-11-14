@@ -47,4 +47,19 @@ data class Thresholds(
     val checkListenMs: Long = 8_000,
     /** F7.2 쉼터 제안 뒤 답을 기다리는 시간. 임시값. */
     val restListenMs: Long = 8_000,
+
+    /** F6.2 기본 단계: 기준 설정 온도에서 낮추는 폭(℃). 기획서 "1도". */
+    val baseDropC: Float = 1.0f,
+    /** F6.3 강화 단계: 기본 단계에서 더 낮추는 폭(℃). 기획서 "1~2도". 임시값. */
+    val boostExtraDropC: Float = 1.5f,
+    /** F6.5 구간이 끝나거나 "힘들어해요" 뒤 이 시간이 지나면 기본 단계로 돌아간다. 기획서 "5분". */
+    val boostHoldMs: Long = 5 * 60_000,
+    /** F6.6 바깥 기온이 이보다 낮으면 겨울로 본다(℃). 임시값. */
+    val winterOutsideC: Float = 5f,
+    /** F6.6 겨울에는 낮추는 폭에 이 값을 곱한다. 임시값. */
+    val winterDropScale: Float = 0.5f,
+    /** F6.6 겨울에는 설정 온도를 이 값 아래로 내리지 않는다(℃). 임시값. */
+    val winterMinSetC: Float = 20f,
+    /** 공조 설정 온도 단위(℃). Virtual Console 기준 0.5. */
+    val setTempStepC: Float = 0.5f,
 )

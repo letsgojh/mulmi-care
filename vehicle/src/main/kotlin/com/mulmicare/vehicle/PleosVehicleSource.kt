@@ -41,6 +41,10 @@ class PleosVehicleSource(
     private var car: Car? = null
     private var propertyManager: CarPropertyManager? = null
     private var onSignal: ((VehicleSignal) -> Unit)? = null
+
+    /** 공조 읽기·제어. [start] 뒤에 쓸 수 있다. */
+    var climate: PleosClimate? = null
+        private set
     private var onIssue: ((String) -> Unit)? = null
 
     private val steeringListener = object : SteeringWheelAngleListener {
@@ -88,6 +92,7 @@ class PleosVehicleSource(
             v.release()
         }
         vehicle = null
+        climate = null
         propertyManager?.let { pm -> runCatching { pm.unregisterCallback(propertyCallback) } }
         propertyManager = null
         car?.disconnect()
@@ -101,6 +106,7 @@ class PleosVehicleSource(
             it.initialize()
             vehicle = it
         }
+        climate = PleosClimate(v, propertyManager = { propertyManager }, onIssue = ::issue)
         val steering = v.getSteeringWheel()
         steering.checkSteeringWheelAngleCapabilities(
             { config, _ ->

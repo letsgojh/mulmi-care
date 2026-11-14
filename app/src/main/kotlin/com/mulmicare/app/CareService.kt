@@ -92,12 +92,32 @@ class CareService : Service() {
             )
         }
         handler.postDelayed(tick, TICK_MS)
+        // 공조 기준값은 차량 서비스 연결을 잠시 기다린 뒤 읽는다 (F6)
+        handler.postDelayed({ readClimateBaseline() }, CLIMATE_READ_DELAY_MS)
         registerDebugReceiver()
         CareLog.add("케어 시작")
     }
 
+    private fun readClimateBaseline() {
+        val climate = source?.climate ?: return
+        runner.climate = climate
+        climate.readBaseline { baseline, outsideC ->
+            handler.post {
+                val s = session ?: return@post
+                if (baseline == null) {
+                    CareLog.add("⚠ 공조 기준값을 읽지 못해 실내 케어를 하지 않음")
+                    return@post
+                }
+                val month = java.util.Calendar.getInstance().get(java.util.Calendar.MONTH) + 1
+                CareLog.add("공조 기준값: $baseline, 바깥 ${outsideC ?: "모름"}℃, ${month}월")
+                dispatch(s.onClimateBaseline(now(), baseline, outsideC, month))
+            }
+        }
+    }
+
     private fun stopCare() {
         handler.removeCallbacks(tick)
+        runner.climate = null
         source?.stop()
         source = null
         session = null
@@ -197,5 +217,6 @@ class CareService : Service() {
         private const val CHANNEL_ID = "care"
         private const val NOTIFICATION_ID = 1
         private const val TICK_MS = 1_000L
+        private const val CLIMATE_READ_DELAY_MS = 2_000L
     }
 }

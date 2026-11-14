@@ -46,5 +46,15 @@ pm.registerCallback(callback, VehiclePropertyIds.GEAR_SELECTION, CarPropertyMana
 - `VehicleGear`: NEUTRAL=0x1, REVERSE=0x2, PARK=0x4, DRIVE=0x8, FIRST=0x10 이상(수동 단수)
 - 권한: `android.car.permission.CAR_SPEED`(dangerous → 런타임 요청 필요), `android.car.permission.CAR_POWERTRAIN`(기어)
 
-## HVAC — 아직 읽지 않음 (F6 구현 때)
-`HVAC.kt`, `HvacTemperatureListener`, `HvacFanSpeedListener`, `HvacRecirculationStateListener`, `FanDirectionType` 등이 있다.
+## HVAC — `vehicle.getHVAC()` (조회 `CAR_CLIMATE`, 제어 `CONTROL_CAR_CLIMATE`)
+구현: `PleosClimate.kt`, 변환·반영 비교: `PleosClimateMapper.kt`
+- 모두 `SeatArea` 단위. 지원 구역은 Capability로 얻는다:
+  - `checkHvacTemperatureCapabilities(onComplete: (CapabilityConfig, Map<SeatArea, AreaBounds<Float>>, HvacTemperatureConfigArray?) -> Unit, onFailed)`
+  - `checkHvacFanSpeedCapabilities(onComplete: (Map<SeatArea, AreaBounds<Int>>) -> Unit, onFailed)` — `AreaBounds(minValue, maxValue)`
+  - `checkHvacFanDirectionCapabilities(onComplete: (CapabilityConfig, Map<SeatArea, List<FanDirectionType>>) -> Unit, onFailed)`
+  - `checkHvacRecirculationCapabilities(onComplete: (List<SeatArea>) -> Unit, onFailed)`, `checkHvacPowerCapabilities(...)` 같은 형태
+- 조회: `getHvacTemperature(area, TemperatureUnit.CELSIUS, onComplete: (Float?) -> Unit, onFailed)`, `getHvacFanSpeed(area, (Int?) -> Unit, onFailed)`, `getHvacFanDirection(area, (FanDirectionType?) -> Unit, onFailed)`, `getHvacRecirculationState(area, (Boolean?) -> Unit, onFailed)`, `getHvacPowerState(...)`
+- 제어: `setHvacTemperature(area, value, TemperatureUnit.CELSIUS, onComplete, onFailed)`, `setHvacFanSpeed(area, Int, ...)`, `setHvacFanDirection(area, FanDirectionType, ...)`, `setHvacRecirculation(area, Boolean, ...)` (false = 외기), `setHvacPower(area, Boolean, ...)`
+- `FanDirectionType`(constant.control): UNKNOWN, FACE, FLOOR, FACE_AND_FLOOR, DEFROST, FACE_AND_DEFROST, DEFROST_AND_FLOOR, FACE_AND_FLOOR_AND_DEFROST
+- 바깥 기온: Vehicle SDK에 없음 → Car API `VehiclePropertyIds.ENV_OUTSIDE_TEMPERATURE` (`CAR_EXTERIOR_ENVIRONMENT`)
+- **에뮬레이터: 공조 전원이 꺼져 있으면 설정이 `PropertyAsyncError code 2`로 거부된다.** 앱의 `setHvacPower(true)`는 반영되지 않았고, Virtual Console로 켜면 동작했다.

@@ -39,6 +39,7 @@ signal() { curl -s -m3 -o /dev/null -X PUT "$BASE/vehicle/turn-signal?mode=$1"; 
 # adb shell은 인자를 기기 셸에서 다시 나누므로, 공백이 있는 말도 한 덩어리로 가도록 명령 전체를 따옴표로 보낸다
 say() { "$ADB" shell "am broadcast -a com.mulmicare.DEBUG_SAY --es text '$1'" >/dev/null; echo "말함: $1"; }
 
+at 0;   curl -s -m3 -o /dev/null -X PUT "$BASE/vehicle/hvac?power=true"; echo "공조 전원 켬 (꺼져 있으면 차량이 공조 설정을 거부함)"
 at 0;   curl -s -m3 -o /dev/null -X PUT "$BASE/vehicle/gear?gear=Drive"; echo "기어 D"
 at 0;   drive 0 60
 at 10;  drive -"$WHEEL"         # 왼쪽
